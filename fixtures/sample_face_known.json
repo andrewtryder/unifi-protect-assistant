@@ -1,0 +1,28 @@
+{
+  "alarm": {
+    "name": "Example Person Detected",
+    "conditions": [
+      {
+        "condition": {
+          "type": "is",
+          "source": "face_known",
+          "value": "example-person-id"
+        }
+      }
+    ],
+    "triggers": [
+      {
+        "device": "example-camera-id",
+        "value": "Example Person",
+        "key": "face_known",
+        "group": {
+          "name": "Example Person"
+        },
+        "eventId": "example-event-id",
+        "timestamp": 1746970986798
+      }
+    ],
+    "eventPath": "/protect/events/event/example-event-id"
+  },
+  "timestamp": 1746970987980
+}

@@ -1,0 +1,17 @@
+{
+  "alarm": {
+    "name": "Unknown Face Detected",
+    "conditions": [],
+    "triggers": [
+      {
+        "device": "front-door-camera",
+        "value": "Unknown",
+        "key": "face_unknown",
+        "eventId": "unknown-event-id",
+        "timestamp": 1746970990000
+      }
+    ],
+    "eventPath": "/protect/events/event/unknown-event-id"
+  },
+  "timestamp": 1746970991000
+}

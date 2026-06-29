@@ -1,0 +1,22 @@
+#:schema node_modules/wrangler/config-schema.json
+name = "unifi-protect-assistant"
+main = "src/index.ts"
+compatibility_date = "2024-05-29"
+
+[vars]
+TIMEZONE = "America/New_York"
+TARGET_PERSON_NAMES = ""
+TARGET_PERSON_IDS = ""
+WATCH_CAMERA_IDS = ""
+
+[[d1_databases]]
+binding = "DB"
+database_name = "unifi_protect_db"
+database_id = "605b47aa-684c-425b-8eac-ce8f508a7cdd"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "c66e834e4d7b484cb5eef270ee92493e"
+
+[triggers]
+crons = ["0 6 * * *"] # 6:00 AM UTC = 2:00 AM EST (safely after midnight ET)
