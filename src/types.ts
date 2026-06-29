@@ -17,6 +17,7 @@ export interface UnifiTrigger {
   };
   eventId: string;
   timestamp: number;
+  image?: string;
 }
 
 export interface UnifiAlarm {
@@ -30,6 +31,7 @@ export interface UnifiAlarm {
   }>;
   triggers: UnifiTrigger[];
   eventPath: string;
+  image?: string;
 }
 
 export interface UnifiWebhookPayload {
@@ -50,6 +52,7 @@ export interface FaceEvent {
   camera_id: string;
   alarm_name: string;
   raw_trigger_json: string;
+  image_base64?: string;
 }
 
 export interface DailyReport {
@@ -76,4 +79,5 @@ export interface WebhookNotification {
   event_id: string;
   alarm_name: string;
   payload_json: string;
+  image_base64?: string;
 }

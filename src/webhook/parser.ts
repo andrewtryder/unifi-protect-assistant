@@ -97,6 +97,10 @@ export function parseWebhookPayload(
       continue;
     }
 
+    // Extract image if present. UniFi Protect webhooks typically send standard key "image" inside trigger or alarm
+    const triggerImage = String(trigger.image || payload.image || alarm.image || "");
+    const imageBase64 = triggerImage.startsWith("data:") || /^[A-Za-z0-9+/=]+$/.test(triggerImage) ? triggerImage : undefined;
+
     events.push({
       id: crypto.randomUUID(),
       notification_id: notificationId,
@@ -110,6 +114,7 @@ export function parseWebhookPayload(
       camera_id: cameraId,
       alarm_name: alarmName,
       raw_trigger_json: JSON.stringify(trigger),
+      image_base64: imageBase64,
     });
   }
 

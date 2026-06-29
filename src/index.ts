@@ -47,6 +47,10 @@ export default {
         const eventId = payload.alarm?.triggers?.[0]?.eventId || "N/A";
         const alarmName = payload.alarm?.name || "N/A";
 
+        // Try extracting top-level or nested image Base64 string
+        const payloadImageRaw = String((payload as any).image || payload.alarm?.image || "");
+        const imageBase64 = payloadImageRaw.startsWith("data:") || /^[A-Za-z0-9+/=]+$/.test(payloadImageRaw) ? payloadImageRaw : undefined;
+
         // Perform ingestion in background or synchronously.
         // We'll run synchronously to confirm storage back to the caller.
         await ingestWebhook(
@@ -57,7 +61,8 @@ export default {
           eventId,
           alarmName,
           rawBody,
-          faceEvents
+          faceEvents,
+          imageBase64
         );
 
         return new Response(JSON.stringify({
