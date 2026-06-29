@@ -61,8 +61,12 @@ export function parseWebhookPayload(
       continue;
     }
 
-    const eventId = String(trigger.eventId || "");
+    let eventId = String(trigger.eventId || "");
     if (!eventId) continue;
+    // If it's a test event ID from a mock dashboard, make it unique so multiple tests can register
+    if (eventId === "testEventId") {
+      eventId = `testEventId-${Date.now()}`;
+    }
 
     const seenAtMs = Number(trigger.timestamp) || Date.now();
     const localDate = getLocalDate(seenAtMs, timezone);
