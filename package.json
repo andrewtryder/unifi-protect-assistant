@@ -12,11 +12,10 @@
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:prod": "wrangler d1 migrations apply DB --remote"
   },
-  "dependencies": {},
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240529.0",
     "typescript": "^5.4.5",
     "vitest": "^1.6.0",
-    "wrangler": "^3.57.1"
+    "wrangler": "^4.107.0"
   }
 }
