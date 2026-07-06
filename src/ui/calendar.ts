@@ -1,10 +1,16 @@
-import { DailyReport } from "../types.js";
+import { DailyReport, PersonSummary } from "../types.js";
 import { renderLayout } from "./layout.js";
+import { renderPeopleFilter, peopleFilterStyles } from "./peopleFilter.js";
 
 /**
  * Helper to build calendar grid HTML
  */
-export function renderCalendar(monthStr: string, reports: DailyReport[]): string {
+export function renderCalendar(
+  monthStr: string,
+  reports: DailyReport[],
+  people: PersonSummary[],
+  selectedPerson?: string
+): string {
   const [year, month] = monthStr.split("-").map(Number);
   
   // Calculate calendar dates
@@ -17,6 +23,10 @@ export function renderCalendar(monthStr: string, reports: DailyReport[]): string
 
   const prevMonthStr = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, "0")}`;
   const nextMonthStr = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, "0")}`;
+
+  const personQuery = selectedPerson ? `&person=${encodeURIComponent(selectedPerson)}` : "";
+  const prevLink = `/calendar?month=${prevMonthStr}${personQuery}`;
+  const nextLink = `/calendar?month=${nextMonthStr}${personQuery}`;
 
   // Group reports by day
   const reportsByDay = new Map<number, DailyReport[]>();
@@ -40,6 +50,7 @@ export function renderCalendar(monthStr: string, reports: DailyReport[]): string
   for (let day = 1; day <= totalDays; day++) {
     const dayReports = reportsByDay.get(day) || [];
     const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const dayLink = `/events?date=${dateStr}${personQuery}`;
     
     let reportsHtml = "";
     if (dayReports.length > 0) {
@@ -54,7 +65,7 @@ export function renderCalendar(monthStr: string, reports: DailyReport[]): string
     }
 
     cells.push(`
-      <a href="/events?date=${dateStr}" class="day-cell-link">
+      <a href="${dayLink}" class="day-cell-link">
         <div class="day-cell ${dayReports.length > 0 ? 'active-day' : ''}">
           <span class="day-number">${day}</span>
           <div class="day-content">${reportsHtml}</div>
@@ -65,11 +76,20 @@ export function renderCalendar(monthStr: string, reports: DailyReport[]): string
 
   const calendarStyles = `
     <style>
+      ${peopleFilterStyles}
       .calendar-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
         margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+        gap: 1rem;
+      }
+      .calendar-header-controls {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
       }
       .month-title {
         font-family: var(--font-heading);
@@ -192,9 +212,12 @@ export function renderCalendar(monthStr: string, reports: DailyReport[]): string
   const calendarHtml = `
     ${calendarStyles}
     <div class="calendar-header">
-      <a href="/calendar?month=${prevMonthStr}" class="nav-btn">&larr; Prev</a>
+      <a href="${prevLink}" class="nav-btn">&larr; Prev</a>
       <div class="month-title">${new Date(year, month - 1, 1).toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" })}</div>
-      <a href="/calendar?month=${nextMonthStr}" class="nav-btn">Next &rarr;</a>
+      <div class="calendar-header-controls">
+        ${renderPeopleFilter(people, selectedPerson, "/calendar", "month", monthStr)}
+        <a href="${nextLink}" class="nav-btn">Next &rarr;</a>
+      </div>
     </div>
     
     <div class="calendar-grid glass-card">
@@ -209,5 +232,9 @@ export function renderCalendar(monthStr: string, reports: DailyReport[]): string
     </div>
   `;
 
-  return renderLayout(`Calendar - ${monthStr}`, calendarHtml);
+  const titleSuffix = selectedPerson ? ` - ${selectedPerson}` : "";
+  return renderLayout(`Calendar - ${monthStr}${titleSuffix}`, calendarHtml, {
+    selectedPerson,
+    calendarMonth: monthStr,
+  });
 }

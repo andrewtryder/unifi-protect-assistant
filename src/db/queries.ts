@@ -1,30 +1,73 @@
-import { Env, DailyReport, FaceEvent } from "../types.js";
+import { Env, DailyReport, FaceEvent, PersonSummary } from "../types.js";
 
 /**
- * Executes a prepared query to get daily reports for a given month
+ * Returns distinct people seen in face_events, grouped case-insensitively by name.
  */
-export async function getReportsForMonth(env: Env, monthStr: string): Promise<DailyReport[]> {
+export async function getDistinctPeople(env: Env): Promise<PersonSummary[]> {
   const query = `
-    SELECT * FROM daily_person_reports
-    WHERE local_date LIKE ?
-    ORDER BY local_date ASC, person_name ASC
+    SELECT MIN(person_name) AS person_name,
+           MAX(seen_at_ms) AS last_seen_ms,
+           COUNT(*) AS event_count
+    FROM face_events
+    GROUP BY LOWER(person_name)
+    ORDER BY person_name ASC
   `;
-  const { results } = await env.DB.prepare(query).bind(`${monthStr}%`).all<DailyReport>();
+  const { results } = await env.DB.prepare(query).all<PersonSummary>();
   return results || [];
 }
 
 /**
- * Query face events for a specific local date
+ * Executes a prepared query to get daily reports for a given month,
+ * optionally filtered to a single person by name (case-insensitive).
  */
-export async function getEventsForDate(env: Env, dateStr: string): Promise<FaceEvent[]> {
-  const query = `
+export async function getReportsForMonth(
+  env: Env,
+  monthStr: string,
+  personName?: string
+): Promise<DailyReport[]> {
+  let query = `
+    SELECT * FROM daily_person_reports
+    WHERE local_date LIKE ?
+  `;
+  const bindings: string[] = [`${monthStr}%`];
+
+  if (personName) {
+    query += ` AND LOWER(person_name) = LOWER(?)`;
+    bindings.push(personName);
+  }
+
+  query += ` ORDER BY local_date ASC, person_name ASC`;
+
+  const { results } = await env.DB.prepare(query).bind(...bindings).all<DailyReport>();
+  return results || [];
+}
+
+/**
+ * Query face events for a specific local date,
+ * optionally filtered to a single person by name (case-insensitive).
+ */
+export async function getEventsForDate(
+  env: Env,
+  dateStr: string,
+  personName?: string
+): Promise<FaceEvent[]> {
+  let query = `
     SELECT id, notification_id, event_id, seen_at_ms, local_date,
-           person_key, person_name, person_id, trigger_key, camera_id, alarm_name
+           person_key, person_name, person_id, trigger_key, camera_id, alarm_name,
+           image_base64
     FROM face_events
     WHERE local_date = ?
-    ORDER BY seen_at_ms ASC
   `;
-  const { results } = await env.DB.prepare(query).bind(dateStr).all<FaceEvent>();
+  const bindings: string[] = [dateStr];
+
+  if (personName) {
+    query += ` AND LOWER(person_name) = LOWER(?)`;
+    bindings.push(personName);
+  }
+
+  query += ` ORDER BY seen_at_ms ASC`;
+
+  const { results } = await env.DB.prepare(query).bind(...bindings).all<FaceEvent>();
   return results || [];
 }
 

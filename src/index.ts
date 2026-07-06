@@ -1,7 +1,7 @@
 import { Env, UnifiWebhookPayload } from "./types.js";
 import { parseWebhookPayload, getLocalDate } from "./webhook/parser.js";
 import { ingestWebhook } from "./webhook/ingester.js";
-import { getReportsForMonth, getEventsForDate } from "./db/queries.js";
+import { getReportsForMonth, getEventsForDate, getDistinctPeople } from "./db/queries.js";
 import { generateDailyReport } from "./reporting/generator.js";
 import { runRetentionCleanup } from "./reporting/cleanup.js";
 import { renderCalendar } from "./ui/calendar.js";
@@ -94,8 +94,12 @@ export default {
       if (!month || !/^\d{4}-\d{2}$/.test(month)) {
         month = getLocalDate(Date.now(), timezone).substring(0, 7);
       }
-      const reports = await getReportsForMonth(env, month);
-      return new Response(renderCalendar(month, reports), {
+      const person = url.searchParams.get("person") || undefined;
+      const [reports, people] = await Promise.all([
+        getReportsForMonth(env, month, person),
+        getDistinctPeople(env),
+      ]);
+      return new Response(renderCalendar(month, reports, people, person), {
         headers: { "Content-Type": "text/html" }
       });
     }
@@ -106,8 +110,12 @@ export default {
       if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         date = getLocalDate(Date.now(), timezone);
       }
-      const events = await getEventsForDate(env, date);
-      return new Response(renderEventsLog(date, events), {
+      const person = url.searchParams.get("person") || undefined;
+      const [events, people] = await Promise.all([
+        getEventsForDate(env, date, person),
+        getDistinctPeople(env),
+      ]);
+      return new Response(renderEventsLog(date, events, people, person), {
         headers: { "Content-Type": "text/html" }
       });
     }
@@ -118,7 +126,8 @@ export default {
       if (!month || !/^\d{4}-\d{2}$/.test(month)) {
         month = getLocalDate(Date.now(), timezone).substring(0, 7);
       }
-      const reports = await getReportsForMonth(env, month);
+      const person = url.searchParams.get("person") || undefined;
+      const reports = await getReportsForMonth(env, month, person);
       return new Response(JSON.stringify(reports), {
         headers: { "Content-Type": "application/json" }
       });
@@ -130,8 +139,17 @@ export default {
       if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         date = getLocalDate(Date.now(), timezone);
       }
-      const events = await getEventsForDate(env, date);
+      const person = url.searchParams.get("person") || undefined;
+      const events = await getEventsForDate(env, date, person);
       return new Response(JSON.stringify(events), {
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    // 7. GET /api/people
+    if (url.pathname === "/api/people") {
+      const people = await getDistinctPeople(env);
+      return new Response(JSON.stringify(people), {
         headers: { "Content-Type": "application/json" }
       });
     }

@@ -1,4 +1,20 @@
-export function renderLayout(title: string, bodyContent: string): string {
+export function renderLayout(
+  title: string,
+  bodyContent: string,
+  options?: { selectedPerson?: string; calendarMonth?: string; eventsDate?: string }
+): string {
+  const personParam = options?.selectedPerson
+    ? `?person=${encodeURIComponent(options.selectedPerson)}`
+    : "";
+
+  const calendarHref = options?.calendarMonth
+    ? `/calendar?month=${options.calendarMonth}${options.selectedPerson ? `&person=${encodeURIComponent(options.selectedPerson)}` : ""}`
+    : `/calendar${personParam}`;
+
+  const eventsHref = options?.eventsDate
+    ? `/events?date=${options.eventsDate}${options.selectedPerson ? `&person=${encodeURIComponent(options.selectedPerson)}` : ""}`
+    : `/events${personParam}`;
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -197,8 +213,8 @@ export function renderLayout(title: string, bodyContent: string): string {
   <header>
     <h1>UniFi Protect Assistant</h1>
     <nav>
-      <a href="/calendar" id="nav-calendar">Calendar</a>
-      <a href="/events" id="nav-events">Events Log</a>
+      <a href="${calendarHref}" id="nav-calendar">Calendar</a>
+      <a href="${eventsHref}" id="nav-events">Events Log</a>
     </nav>
   </header>
   

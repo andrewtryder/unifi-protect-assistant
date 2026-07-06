@@ -72,6 +72,12 @@ export interface DailyReport {
   generated_at_ms: number;
 }
 
+export interface PersonSummary {
+  person_name: string;
+  last_seen_ms: number;
+  event_count: number;
+}
+
 export interface WebhookNotification {
   id: string;
   received_at_ms: number;

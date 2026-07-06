@@ -5,9 +5,10 @@ A lightweight, premium Cloudflare Workers app that ingests webhook notifications
 ## Features
 
 - **Webhook Ingestion (`POST /unifi`)**: Authenticated webhook processing with schema parsing safeguards.
-- **Filtering**: Target specifically configured person names and face IDs, or capture all detections if no filter is set.
+- **Person Tracking**: By default, captures all known people from UniFi Protect's Face Library (`face_known`) plus unrecognized faces (`face_unknown`). Optional `TARGET_PERSON_NAMES` / `TARGET_PERSON_IDS` env vars restrict ingestion to specific individuals.
+- **Person Filter Dropdown**: Calendar and Events Log views include a dropdown to filter by any detected person (or "All People").
 - **Reporting**: Computes first-seen, last-seen, total time (rounded up to the nearest 15 minutes), and frequency counts.
-- **Aesthetic UI**: A modern glassmorphism calendar and event log UI rendered server-side for rapid, responsive mobile and desktop viewing.
+- **Aesthetic UI**: A modern glassmorphism calendar and event log UI rendered server-side for rapid, responsive mobile and desktop viewing. Event thumbnails are shown when available.
 - **Data Retention Policy**: Automated cleanup purging raw payloads after 30 days, and normalized events/reports after 365 days.
 
 ---
@@ -29,8 +30,11 @@ UniFi Protect NVR (Alarm Webhook)
        │
        └─────────► Read-Only Web Interface
                    ├─► GET / (Redirects to current month)
-                   ├─► GET /calendar?month=YYYY-MM (Month View Grid)
-                   └─► GET /events?date=YYYY-MM-DD (Detailed Day Logs)
+                   ├─► GET /calendar?month=YYYY-MM&person=Name (Month View Grid)
+                   ├─► GET /events?date=YYYY-MM-DD&person=Name (Detailed Day Logs)
+                   ├─► GET /api/people (Distinct people JSON)
+                   ├─► GET /api/reports?month=YYYY-MM&person=Name
+                   └─► GET /api/events?date=YYYY-MM-DD&person=Name
 ```
 
 ---
@@ -69,9 +73,9 @@ compatibility_date = "2024-05-29"
 
 [vars]
 TIMEZONE = "America/New_York"
-TARGET_PERSON_NAMES = "John Doe, Jane Smith"
-TARGET_PERSON_IDS = "unifi-face-id-1, unifi-face-id-2"
-WATCH_CAMERA_IDS = "" # Optional list to narrow down cameras
+TARGET_PERSON_NAMES = ""  # Optional: comma-separated names to restrict ingestion (blank = all people)
+TARGET_PERSON_IDS = ""    # Optional: comma-separated UniFi face IDs to restrict ingestion
+WATCH_CAMERA_IDS = ""     # Optional list to narrow down cameras
 
 [[d1_databases]]
 binding = "DB"
@@ -100,6 +104,12 @@ Launch wrangler's local development server:
 ```bash
 npm run dev
 ```
+
+### Person Filtering
+
+By default (with `TARGET_PERSON_NAMES` and `TARGET_PERSON_IDS` left blank), the app ingests every face detection UniFi Protect sends — all named people from your Face Library plus unrecognized faces (`Unknown`). Use the **Person** dropdown on the Calendar and Events Log pages to filter the view to a single individual, or leave it on **All People** for the combined view.
+
+Set `TARGET_PERSON_NAMES` and/or `TARGET_PERSON_IDS` only if you want to restrict which detections are stored at ingestion time (e.g. privacy or opt-in tracking for specific individuals). The UI dropdown always reflects whoever has been ingested into the database.
 
 ---
 
@@ -149,5 +159,5 @@ In the UniFi Protect controller interface under the **Alarm Manager**:
 ## Privacy & Security Disclaimer
 
 This dashboard serves a **read-only UI with NO authentication**. Anyone visiting the worker URL can view the calendar and the daily log tables.
-While raw UniFi Protect payloads (including original NVR event metadata paths and raw trigger contexts) are not displayed publicly, the UI exposes the dates, times, camera IDs, and names of individuals detected by the system.
+While raw UniFi Protect payloads (including original NVR event metadata paths and raw trigger contexts) are not displayed publicly, the UI exposes the dates, times, camera IDs, detection thumbnails, and names of individuals detected by the system. With default settings, this includes every person in your UniFi Protect Face Library.
 Please ensure the deployment URL is kept private, or deploy behind Cloudflare Access if strict authentication is required.
