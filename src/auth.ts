@@ -12,6 +12,7 @@ export function createAuth(env: Env, baseURL?: string) {
   const resolvedBaseURL = baseURL || env.BETTER_AUTH_URL || DEFAULT_BASE_URL;
 
   return betterAuth({
+    appName: "UniFi Protect Assistant",
     database: env.DB,
     baseURL: resolvedBaseURL,
     secret: env.BETTER_AUTH_SECRET,
@@ -26,6 +27,15 @@ export function createAuth(env: Env, baseURL?: string) {
         apiKey: env.BETTER_AUTH_API_KEY as string,
       }),
     ],
+    advanced: {
+      ipAddress: {
+        // Cloudflare sets the true client IP; x-forwarded-for as fallback
+        ipAddressHeaders: ["cf-connecting-ip", "x-forwarded-for"],
+      },
+    },
+    experimental: {
+      joins: true,
+    },
     databaseHooks: {
       user: {
         create: {
