@@ -206,9 +206,21 @@ npm run deploy
 
 This repository includes a GitHub Action to automatically deploy on push to the `main` branch. 
 
-Add the following secrets to your GitHub Repository Settings (`Settings -> Secrets and variables -> Actions`):
-- `CLOUDFLARE_API_TOKEN`: Your Cloudflare API Token (needs permissions for Workers, D1, and KV).
-- `CLOUDFLARE_ACCOUNT_ID`: Your Cloudflare Account ID.
+Add the following secrets to your GitHub Repository Settings (`Settings -> Secrets and variables -> Actions`). On every deploy to `main`, the workflow uploads the app secrets to the Cloudflare Worker (in addition to deploying `[vars]` from `wrangler.toml`):
+
+| GitHub secret | Purpose |
+| --- | --- |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API token (Workers, D1, KV) |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |
+| `BETTER_AUTH_SECRET` | App signing secret (≥32 chars) |
+| `BETTER_AUTH_API_KEY` | Better Auth Infrastructure API key (`ba_…`) |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
+| `ALLOWED_EMAILS` | Comma-separated allowlisted Google emails |
+
+Optional: `WEBHOOK_SECRET` — set with `npx wrangler secret put WEBHOOK_SECRET` if you protect `POST /unifi` (not synced by CI unless you add it to the workflow and GitHub secrets).
+
+You can also re-run **Deploy Worker** via `workflow_dispatch` to refresh Cloudflare secrets without a code change.
 
 ---
 

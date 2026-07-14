@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -34,3 +35,17 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Plain [vars] come from wrangler.toml on deploy.
+          # These Worker secrets are created/replaced from GitHub Actions secrets.
+          secrets: |
+            BETTER_AUTH_SECRET
+            BETTER_AUTH_API_KEY
+            GOOGLE_CLIENT_ID
+            GOOGLE_CLIENT_SECRET
+            ALLOWED_EMAILS
+        env:
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          BETTER_AUTH_API_KEY: ${{ secrets.BETTER_AUTH_API_KEY }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          ALLOWED_EMAILS: ${{ secrets.ALLOWED_EMAILS }}
