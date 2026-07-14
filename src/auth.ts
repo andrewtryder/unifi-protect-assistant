@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
+import { dash } from "@better-auth/infra";
 import type { Env } from "./types.js";
 import { isEmailAllowed } from "./auth-allowlist.js";
 
@@ -13,14 +14,18 @@ export function createAuth(env: Env, baseURL?: string) {
   return betterAuth({
     database: env.DB,
     baseURL: resolvedBaseURL,
-    // Prefer dedicated signing secret; allow BETTER_AUTH_API_KEY as fallback
-    secret: env.BETTER_AUTH_SECRET || env.BETTER_AUTH_API_KEY,
+    secret: env.BETTER_AUTH_SECRET,
     socialProviders: {
       google: {
         clientId: env.GOOGLE_CLIENT_ID as string,
         clientSecret: env.GOOGLE_CLIENT_SECRET as string,
       },
     },
+    plugins: [
+      dash({
+        apiKey: env.BETTER_AUTH_API_KEY as string,
+      }),
+    ],
     databaseHooks: {
       user: {
         create: {

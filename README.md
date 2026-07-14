@@ -109,8 +109,9 @@ id = "YOUR_KV_NAMESPACE_ID"
 Create a `.dev.vars` file in the root directory:
 ```env
 WEBHOOK_SECRET=your_dev_shared_webhook_secret
+# App signing secret (≥32 chars). Separate from the Infrastructure API key.
 BETTER_AUTH_SECRET=generate_a_long_random_secret_at_least_32_chars
-# Optional: Better Auth Infrastructure API key (also used as secret fallback if BETTER_AUTH_SECRET unset)
+# From your Better Auth Infrastructure project (enables dash user mgmt / analytics)
 BETTER_AUTH_API_KEY=ba_...
 GOOGLE_CLIENT_ID=your_google_oauth_client_id
 GOOGLE_CLIENT_SECRET=your_google_oauth_client_secret
@@ -173,9 +174,12 @@ Set secrets on the live worker (do not commit these values):
 ```bash
 npx wrangler secret put WEBHOOK_SECRET
 npx wrangler secret put BETTER_AUTH_SECRET
+npx wrangler secret put BETTER_AUTH_API_KEY
 npx wrangler secret put GOOGLE_CLIENT_ID
 npx wrangler secret put GOOGLE_CLIENT_SECRET
 ```
+
+Create a project in the [Better Auth Infrastructure](https://www.better-auth.com/docs/infrastructure/getting-started) dashboard, copy its API key into `BETTER_AUTH_API_KEY`, and keep `BETTER_AUTH_SECRET` as a separate random signing secret. The `dash()` plugin in this Worker uses the API key to connect hosted user management, sessions, analytics, and audit logs.
 
 Set the allowlist (plain Worker var is fine):
 ```bash

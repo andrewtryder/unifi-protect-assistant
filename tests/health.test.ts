@@ -35,6 +35,18 @@ describe("getConfigWarnings", () => {
     expect(warnings.some((w) => w.includes("ALLOWED_EMAILS"))).toBe(true);
   });
 
+  it("warns on missing auth secret and infrastructure API key separately", () => {
+    const warnings = getConfigWarnings({
+      ...base,
+      WEBHOOK_SECRET: "x",
+      ALLOWED_EMAILS: "a@b.com",
+      GOOGLE_CLIENT_ID: "id",
+      GOOGLE_CLIENT_SECRET: "secret",
+    });
+    expect(warnings.some((w) => w.includes("BETTER_AUTH_SECRET"))).toBe(true);
+    expect(warnings.some((w) => w.includes("BETTER_AUTH_API_KEY"))).toBe(true);
+  });
+
   it("warns on invalid presence gap JSON", () => {
     const warnings = getConfigWarnings({
       ...base,
@@ -43,6 +55,7 @@ describe("getConfigWarnings", () => {
       GOOGLE_CLIENT_ID: "id",
       GOOGLE_CLIENT_SECRET: "secret",
       BETTER_AUTH_SECRET: "secret-secret-secret-secret-secret",
+      BETTER_AUTH_API_KEY: "ba_test",
       PRESENCE_GAP_BY_PERSON: "{bad",
     });
     expect(warnings.some((w) => w.includes("PRESENCE_GAP_BY_PERSON"))).toBe(true);
@@ -56,6 +69,7 @@ describe("getConfigWarnings", () => {
       GOOGLE_CLIENT_ID: "id",
       GOOGLE_CLIENT_SECRET: "secret",
       BETTER_AUTH_SECRET: "secret-secret-secret-secret-secret",
+      BETTER_AUTH_API_KEY: "ba_test",
     });
     expect(warnings).toEqual([]);
   });
