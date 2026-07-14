@@ -9,7 +9,7 @@ TIMEZONE = "America/New_York"
 TARGET_PERSON_NAMES = ""
 TARGET_PERSON_IDS = ""
 WATCH_CAMERA_IDS = ""
-ALLOWED_EMAILS = "atr000@gmail.com"
+# ALLOWED_EMAILS is a Worker secret (synced from GitHub Actions on deploy)
 BETTER_AUTH_URL = "https://unifi-protect-assistant.mrcoffee.workers.dev"
 
 PRESENCE_GAP_MINUTES = "20"

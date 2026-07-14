@@ -181,11 +181,7 @@ npx wrangler secret put GOOGLE_CLIENT_SECRET
 
 Create a project in the [Better Auth Infrastructure](https://www.better-auth.com/docs/infrastructure/getting-started) dashboard, copy its API key into `BETTER_AUTH_API_KEY`, and keep `BETTER_AUTH_SECRET` as a separate random signing secret. The `dash()` plugin in this Worker uses the API key to connect hosted user management, sessions, analytics, and audit logs.
 
-Set the allowlist (plain Worker var is fine):
-```bash
-npx wrangler secret put ALLOWED_EMAILS
-# or edit ALLOWED_EMAILS under [vars] in wrangler.toml
-```
+`ALLOWED_EMAILS` is a Worker secret (set in GitHub Actions secrets and synced on deploy), not a `[vars]` entry.
 
 `BETTER_AUTH_URL` defaults to `https://unifi-protect-assistant.mrcoffee.workers.dev` via `[vars]` in `wrangler.toml`.
 
