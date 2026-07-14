@@ -28,11 +28,13 @@ UniFi Protect NVR (Alarm Webhook)
        │           ├─► Compute Yesterday's `daily_person_reports`
        │           └─► Purge expired records (30 days raw / 1 yr events & reports)
        │
-       └─────────► Read-Only Web Interface
-                   ├─► GET / (Redirects to current month)
-                   ├─► GET /calendar?month=YYYY-MM&person=Name (Month View Grid)
-                   ├─► GET /events?date=YYYY-MM-DD&person=Name (Detailed Day Logs)
-                   ├─► GET /api/people (Distinct people JSON)
+       └─────────► Read-Only Web Interface (Google OAuth + ALLOWED_EMAILS)
+                   ├─► GET /login (public)
+                   ├─► GET / (Redirects to current month; auth required)
+                   ├─► GET /calendar?month=YYYY-MM&person=Name
+                   ├─► GET /events?date=YYYY-MM-DD&person=Name
+                   ├─► GET /api/auth/* (better-auth)
+                   ├─► GET /api/people
                    ├─► GET /api/reports?month=YYYY-MM&person=Name
                    └─► GET /api/events?date=YYYY-MM-DD&person=Name
 ```
@@ -69,13 +71,16 @@ Configure the bindings matching your database and KV namespace IDs:
 ```toml
 name = "unifi-protect-assistant"
 main = "src/index.ts"
-compatibility_date = "2024-05-29"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
 
 [vars]
 TIMEZONE = "America/New_York"
 TARGET_PERSON_NAMES = ""  # Optional: comma-separated names to restrict ingestion (blank = all people)
 TARGET_PERSON_IDS = ""    # Optional: comma-separated UniFi face IDs to restrict ingestion
 WATCH_CAMERA_IDS = ""     # Optional list to narrow down cameras
+ALLOWED_EMAILS = ""       # Comma-separated Google emails allowed to sign in
+BETTER_AUTH_URL = "https://unifi-protect-assistant.mrcoffee.workers.dev"
 
 [[d1_databases]]
 binding = "DB"
@@ -91,15 +96,27 @@ id = "YOUR_KV_NAMESPACE_ID"
 Create a `.dev.vars` file in the root directory:
 ```env
 WEBHOOK_SECRET=your_dev_shared_webhook_secret
+BETTER_AUTH_SECRET=generate_a_long_random_secret_at_least_32_chars
+# Optional: Better Auth Infrastructure API key (also used as secret fallback if BETTER_AUTH_SECRET unset)
+BETTER_AUTH_API_KEY=ba_...
+GOOGLE_CLIENT_ID=your_google_oauth_client_id
+GOOGLE_CLIENT_SECRET=your_google_oauth_client_secret
+ALLOWED_EMAILS=you@gmail.com,other@example.com
+BETTER_AUTH_URL=http://localhost:8787
 ```
 
-### 3. Local Migration Application
+### 3. Google OAuth redirect URIs
+In [Google Cloud Console](https://console.cloud.google.com/apis/credentials) → your OAuth 2.0 Client, add Authorized redirect URIs:
+- Production: `https://unifi-protect-assistant.mrcoffee.workers.dev/api/auth/callback/google`
+- Local: `http://localhost:8787/api/auth/callback/google`
+
+### 4. Local Migration Application
 Apply the database migrations to your local development environment:
 ```bash
 npm run db:migrate:local
 ```
 
-### 4. Running the Dev Server
+### 5. Running the Dev Server
 Launch wrangler's local development server:
 ```bash
 npm run dev
@@ -116,10 +133,21 @@ Set `TARGET_PERSON_NAMES` and/or `TARGET_PERSON_IDS` only if you want to restric
 ## Deployment & Production Setup
 
 ### Secrets configuration
-Set your webhook verification secret on the live worker:
+Set secrets on the live worker (do not commit these values):
 ```bash
 npx wrangler secret put WEBHOOK_SECRET
+npx wrangler secret put BETTER_AUTH_SECRET
+npx wrangler secret put GOOGLE_CLIENT_ID
+npx wrangler secret put GOOGLE_CLIENT_SECRET
 ```
+
+Set the allowlist (plain Worker var is fine):
+```bash
+npx wrangler secret put ALLOWED_EMAILS
+# or edit ALLOWED_EMAILS under [vars] in wrangler.toml
+```
+
+`BETTER_AUTH_URL` defaults to `https://unifi-protect-assistant.mrcoffee.workers.dev` via `[vars]` in `wrangler.toml`.
 
 ### Production Migrations
 Apply the migrations to the live Cloudflare production D1 instance:
@@ -158,6 +186,8 @@ In the UniFi Protect controller interface under the **Alarm Manager**:
 
 ## Privacy & Security Disclaimer
 
-This dashboard serves a **read-only UI with NO authentication**. Anyone visiting the worker URL can view the calendar and the daily log tables.
-While raw UniFi Protect payloads (including original NVR event metadata paths and raw trigger contexts) are not displayed publicly, the UI exposes the dates, times, camera IDs, detection thumbnails, and names of individuals detected by the system. With default settings, this includes every person in your UniFi Protect Face Library.
-Please ensure the deployment URL is kept private, or deploy behind Cloudflare Access if strict authentication is required.
+The dashboard and JSON APIs (`/`, `/calendar`, `/events`, `/api/*`) require **Google OAuth** via [better-auth](https://www.better-auth.com/). Only emails listed in `ALLOWED_EMAILS` can sign up or use an active session.
+
+`POST /unifi` remains separate: it uses the `X-Webhook-Secret` shared secret so UniFi Protect can post without a browser login.
+
+While raw UniFi Protect payloads are not displayed publicly, authenticated users can see dates, times, camera IDs, detection thumbnails, and names of individuals detected by the system. Keep OAuth credentials and `ALLOWED_EMAILS` up to date.

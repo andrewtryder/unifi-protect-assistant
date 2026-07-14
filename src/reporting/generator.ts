@@ -1,5 +1,5 @@
 import { Env, DailyReport, FaceEvent } from "../types.js";
-import { getEventsForDate, upsertDailyReport } from "../db/queries.js";
+import { getDistinctDatesForMonth, getEventsForDate, upsertDailyReport } from "../db/queries.js";
 
 /**
  * Rounds milliseconds up to the nearest 15-minute interval
@@ -70,5 +70,16 @@ export async function generateDailyReport(env: Env, localDate: string): Promise<
     };
 
     await upsertDailyReport(env, report);
+  }
+}
+
+/**
+ * Ensures daily_person_reports exist for every local_date in the month that has face_events.
+ * Used when cron is unavailable so calendar views stay populated from raw events.
+ */
+export async function ensureReportsForMonth(env: Env, monthStr: string): Promise<void> {
+  const dates = await getDistinctDatesForMonth(env, monthStr);
+  for (const localDate of dates) {
+    await generateDailyReport(env, localDate);
   }
 }

@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { getDistinctPeople, getReportsForMonth, getEventsForDate } from "../src/db/queries.js";
+import {
+  getDistinctPeople,
+  getDistinctPeopleForDate,
+  getDistinctPeopleForMonth,
+  getDistinctDatesForMonth,
+  getReportsForMonth,
+  getEventsForDate,
+} from "../src/db/queries.js";
 import { Env, FaceEvent, DailyReport } from "../src/types.js";
 
 const sampleFaceEvents: FaceEvent[] = [
@@ -120,8 +127,16 @@ function createMockEnv(faceEvents: FaceEvent[], dailyReports: DailyReport[]): En
   function executeAll<T>(query: string, boundArgs: unknown[]): Promise<{ results: T[] }> {
     return Promise.resolve().then(() => {
       if (query.includes("GROUP BY LOWER(person_name)")) {
+        let scoped = faceEvents;
+        if (query.includes("WHERE local_date = ?")) {
+          scoped = faceEvents.filter(e => e.local_date === boundArgs[0]);
+        } else if (query.includes("WHERE local_date LIKE ?")) {
+          const prefix = String(boundArgs[0]).replace("%", "");
+          scoped = faceEvents.filter(e => e.local_date.startsWith(prefix));
+        }
+
         const groups = new Map<string, { person_name: string; last_seen_ms: number; event_count: number }>();
-        for (const e of faceEvents) {
+        for (const e of scoped) {
           const key = e.person_name.toLowerCase();
           const existing = groups.get(key);
           if (!existing) {
@@ -144,6 +159,18 @@ function createMockEnv(faceEvents: FaceEvent[], dailyReports: DailyReport[]): En
           a.person_name.localeCompare(b.person_name)
         );
         return { results: results as T[] };
+      }
+
+      if (query.includes("SELECT DISTINCT local_date")) {
+        const prefix = String(boundArgs[0]).replace("%", "");
+        const dates = [
+          ...new Set(
+            faceEvents
+              .filter(e => e.local_date.startsWith(prefix))
+              .map(e => e.local_date)
+          ),
+        ].sort();
+        return { results: dates.map(local_date => ({ local_date })) as T[] };
       }
 
       if (query.includes("FROM daily_person_reports")) {
@@ -204,6 +231,30 @@ describe("Query layer - person filtering", () => {
     const alice = people.find(p => p.person_name.toLowerCase() === "alice");
     expect(alice?.event_count).toBe(2);
     expect(alice?.last_seen_ms).toBe(1747143786798);
+  });
+
+  it("getDistinctPeopleForDate only includes people seen on that date", async () => {
+    const people = await getDistinctPeopleForDate(env, "2025-07-01");
+    expect(people.map(p => p.person_name).sort()).toEqual(["Alice", "Bob"]);
+    expect(people.find(p => p.person_name === "Unknown")).toBeUndefined();
+  });
+
+  it("getDistinctPeopleForDate excludes people only seen on other days", async () => {
+    const people = await getDistinctPeopleForDate(env, "2025-07-02");
+    expect(people).toHaveLength(1);
+    expect(people[0].person_name).toBe("Unknown");
+  });
+
+  it("getDistinctPeopleForMonth scopes people to the month", async () => {
+    const people = await getDistinctPeopleForMonth(env, "2025-07");
+    expect(people.map(p => p.person_name).sort()).toEqual(["Alice", "Bob", "Unknown"]);
+    const empty = await getDistinctPeopleForMonth(env, "2025-06");
+    expect(empty).toHaveLength(0);
+  });
+
+  it("getDistinctDatesForMonth returns unique dates with events", async () => {
+    const dates = await getDistinctDatesForMonth(env, "2025-07");
+    expect(dates).toEqual(["2025-07-01", "2025-07-02", "2025-07-03"]);
   });
 
   it("getReportsForMonth returns all reports for a month without person filter", async () => {

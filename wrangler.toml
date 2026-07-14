@@ -1,13 +1,16 @@
 #:schema node_modules/wrangler/config-schema.json
 name = "unifi-protect-assistant"
 main = "src/index.ts"
-compatibility_date = "2024-05-29"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
 
 [vars]
 TIMEZONE = "America/New_York"
 TARGET_PERSON_NAMES = ""
 TARGET_PERSON_IDS = ""
 WATCH_CAMERA_IDS = ""
+ALLOWED_EMAILS = "atr000@gmail.com"
+BETTER_AUTH_URL = "https://unifi-protect-assistant.mrcoffee.workers.dev"
 
 [[d1_databases]]
 binding = "DB"

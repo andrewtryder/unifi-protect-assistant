@@ -6,6 +6,14 @@ export interface Env {
   TARGET_PERSON_NAMES?: string;
   TARGET_PERSON_IDS?: string;
   WATCH_CAMERA_IDS?: string;
+  /** Comma-separated Google emails allowed to access the dashboard */
+  ALLOWED_EMAILS?: string;
+  BETTER_AUTH_SECRET?: string;
+  /** Better Auth Infrastructure API key; also used as signing secret fallback */
+  BETTER_AUTH_API_KEY?: string;
+  BETTER_AUTH_URL?: string;
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
 }
 
 export interface UnifiTrigger {

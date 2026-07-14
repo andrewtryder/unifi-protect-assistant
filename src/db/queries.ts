@@ -17,6 +17,63 @@ export async function getDistinctPeople(env: Env): Promise<PersonSummary[]> {
 }
 
 /**
+ * Returns distinct people seen on a specific local date.
+ */
+export async function getDistinctPeopleForDate(
+  env: Env,
+  dateStr: string
+): Promise<PersonSummary[]> {
+  const query = `
+    SELECT MIN(person_name) AS person_name,
+           MAX(seen_at_ms) AS last_seen_ms,
+           COUNT(*) AS event_count
+    FROM face_events
+    WHERE local_date = ?
+    GROUP BY LOWER(person_name)
+    ORDER BY person_name ASC
+  `;
+  const { results } = await env.DB.prepare(query).bind(dateStr).all<PersonSummary>();
+  return results || [];
+}
+
+/**
+ * Returns distinct people seen in a given YYYY-MM month.
+ */
+export async function getDistinctPeopleForMonth(
+  env: Env,
+  monthStr: string
+): Promise<PersonSummary[]> {
+  const query = `
+    SELECT MIN(person_name) AS person_name,
+           MAX(seen_at_ms) AS last_seen_ms,
+           COUNT(*) AS event_count
+    FROM face_events
+    WHERE local_date LIKE ?
+    GROUP BY LOWER(person_name)
+    ORDER BY person_name ASC
+  `;
+  const { results } = await env.DB.prepare(query).bind(`${monthStr}%`).all<PersonSummary>();
+  return results || [];
+}
+
+/**
+ * Returns distinct local_date values that have face_events in a YYYY-MM month.
+ */
+export async function getDistinctDatesForMonth(
+  env: Env,
+  monthStr: string
+): Promise<string[]> {
+  const query = `
+    SELECT DISTINCT local_date
+    FROM face_events
+    WHERE local_date LIKE ?
+    ORDER BY local_date ASC
+  `;
+  const { results } = await env.DB.prepare(query).bind(`${monthStr}%`).all<{ local_date: string }>();
+  return (results || []).map(r => r.local_date);
+}
+
+/**
  * Executes a prepared query to get daily reports for a given month,
  * optionally filtered to a single person by name (case-insensitive).
  */

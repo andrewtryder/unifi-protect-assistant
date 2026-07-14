@@ -85,9 +85,11 @@ export function renderLayout(
     nav {
       display: flex;
       gap: 1rem;
+      align-items: center;
+      flex-wrap: wrap;
     }
 
-    nav a {
+    nav a, nav button.sign-out {
       color: var(--text-muted);
       text-decoration: none;
       font-weight: 500;
@@ -96,9 +98,12 @@ export function renderLayout(
       border-radius: 8px;
       transition: all 0.2s ease;
       border: 1px solid transparent;
+      background: transparent;
+      font-family: var(--font-body);
+      cursor: pointer;
     }
 
-    nav a:hover, nav a.active {
+    nav a:hover, nav a.active, nav button.sign-out:hover {
       color: var(--text);
       background: var(--panel);
       border-color: var(--border);
@@ -202,7 +207,7 @@ export function renderLayout(
       nav {
         width: 100%;
       }
-      nav a {
+      nav a, nav button.sign-out {
         flex: 1;
         text-align: center;
       }
@@ -215,6 +220,7 @@ export function renderLayout(
     <nav>
       <a href="${calendarHref}" id="nav-calendar">Calendar</a>
       <a href="${eventsHref}" id="nav-events">Events Log</a>
+      <button type="button" class="sign-out" id="sign-out">Sign out</button>
     </nav>
   </header>
   
@@ -234,6 +240,16 @@ export function renderLayout(
     } else {
       document.getElementById('nav-calendar').classList.add('active');
     }
+
+    document.getElementById('sign-out').addEventListener('click', async () => {
+      await fetch('/api/auth/sign-out', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}'
+      });
+      window.location.href = '/login';
+    });
   </script>
 </body>
 </html>`;

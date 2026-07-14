@@ -9,6 +9,14 @@ function formatImageSrc(imageBase64: string): string {
   return `data:image/jpeg;base64,${imageBase64}`;
 }
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 /**
  * Renders the list of events for a single day in a beautiful table
  */
@@ -20,7 +28,10 @@ export function renderEventsLog(
 ): string {
   let rowsHtml = "";
   if (events.length === 0) {
-    rowsHtml = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 3rem 1rem;">No recognition events recorded for this date.</td></tr>`;
+    const emptyMessage = selectedPerson
+      ? `No recognition events for ${escapeHtml(selectedPerson)} on this date.`
+      : "No recognition events recorded for this date.";
+    rowsHtml = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 3rem 1rem;">${emptyMessage}</td></tr>`;
   } else {
     rowsHtml = events.map(e => {
       const timeStr = new Date(e.seen_at_ms).toLocaleTimeString("en-US", {
