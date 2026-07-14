@@ -4,18 +4,35 @@ import { ingestWebhook } from "./webhook/ingester.js";
 import {
   getReportsForMonth,
   getEventsForDate,
-  getDistinctPeople,
   getDistinctPeopleForDate,
   getDistinctPeopleForMonth,
+  getPeopleDirectory,
+  getPersonProfile,
 } from "./db/queries.js";
 import { ensureReportsForMonth, generateDailyReport } from "./reporting/generator.js";
 import { runRetentionCleanup } from "./reporting/cleanup.js";
 import { renderCalendar } from "./ui/calendar.js";
 import { renderEventsLog } from "./ui/events.js";
 import { renderLoginPage } from "./ui/login.js";
+import { renderTodayDashboard } from "./ui/today.js";
+import {
+  renderPeopleDirectory,
+  renderPersonProfile,
+  renderPersonNotFound,
+} from "./ui/people.js";
 import { PersonSummary } from "./types.js";
 import { createAuth } from "./auth.js";
 import { isEmailAllowed } from "./auth-allowlist.js";
+import { buildTodaySnapshot } from "./reporting/sessions.js";
+import {
+  incrementCounter,
+  setCleanupOk,
+  setCronError,
+  setCronReportOk,
+  setD1Error,
+} from "./ops/kvCounters.js";
+import { buildHealthSnapshot } from "./ops/buildHealthSnapshot.js";
+import { renderHealthPage } from "./ui/health.js";
 
 /**
  * Keeps a selected person visible in the dropdown when day/month navigation
@@ -118,6 +135,7 @@ export default {
       const secretHeader = request.headers.get("X-Webhook-Secret");
       const expectedSecret = env.WEBHOOK_SECRET;
       if (expectedSecret && secretHeader !== expectedSecret) {
+        ctx.waitUntil(incrementCounter(env, "rejected_auth").catch(() => undefined));
         return new Response("Unauthorized", { status: 401 });
       }
 
@@ -130,6 +148,7 @@ export default {
         try {
           payload = JSON.parse(rawBody);
         } catch {
+          ctx.waitUntil(incrementCounter(env, "rejected_json").catch(() => undefined));
           return new Response(JSON.stringify({ error: "Invalid JSON" }), {
             status: 400,
             headers: { "Content-Type": "application/json" }
@@ -139,6 +158,10 @@ export default {
         const notificationId = crypto.randomUUID();
         const faceEvents = parseWebhookPayload(payload, notificationId, env);
 
+        if (faceEvents.length === 0) {
+          ctx.waitUntil(incrementCounter(env, "zero_face_webhooks").catch(() => undefined));
+        }
+
         // Fetch basic info from payload for logging/notification storage
         const eventId = payload.alarm?.triggers?.[0]?.eventId || "N/A";
         const alarmName = payload.alarm?.name || "N/A";
@@ -147,9 +170,7 @@ export default {
         const payloadImageRaw = String((payload as any).image || payload.alarm?.image || "");
         const imageBase64 = payloadImageRaw.startsWith("data:") || /^[A-Za-z0-9+/=]+$/.test(payloadImageRaw) ? payloadImageRaw : undefined;
 
-        // Perform ingestion in background or synchronously.
-        // We'll run synchronously to confirm storage back to the caller.
-        await ingestWebhook(
+        const ingestResult = await ingestWebhook(
           env,
           notificationId,
           receivedAtMs,
@@ -161,16 +182,36 @@ export default {
           imageBase64
         );
 
+        ctx.waitUntil((async () => {
+          await incrementCounter(env, "ingested_webhooks");
+          if (ingestResult.eventsAttempted > 0) {
+            await incrementCounter(env, "events_attempted", ingestResult.eventsAttempted);
+          }
+          if (ingestResult.eventsInserted > 0) {
+            await incrementCounter(env, "events_inserted", ingestResult.eventsInserted);
+          }
+          if (ingestResult.duplicates > 0) {
+            await incrementCounter(env, "duplicates", ingestResult.duplicates);
+          }
+        })().catch(() => undefined));
+
         return new Response(JSON.stringify({
           success: true,
-          events_ingested: faceEvents.length
+          events_ingested: ingestResult.eventsInserted,
+          events_attempted: ingestResult.eventsAttempted,
+          duplicates: ingestResult.duplicates,
         }), {
           status: 200,
           headers: { "Content-Type": "application/json" }
         });
       } catch (err: any) {
         console.error("Webhook processing error:", err);
-        return new Response(JSON.stringify({ error: "Internal Server Error", message: err.message }), {
+        const message = err instanceof Error ? err.message : String(err);
+        ctx.waitUntil((async () => {
+          await incrementCounter(env, "d1_failures");
+          await setD1Error(env, message);
+        })().catch(() => undefined));
+        return new Response(JSON.stringify({ error: "Internal Server Error", message }), {
           status: 200, // Do not crash/return error code to webhook provider
           headers: { "Content-Type": "application/json" }
         });
@@ -185,13 +226,102 @@ export default {
       });
     }
 
-    // 2. GET / - Redirect to /calendar (auth required)
+    // 2. GET / - Redirect to /today (auth required)
     if (url.pathname === "/") {
       const gate = await requireDashboardAuth(request, env, "html");
       if (!gate.ok) return gate.response;
-      const nowStr = getLocalDate(Date.now(), timezone);
-      const currentMonth = nowStr.substring(0, 7); // YYYY-MM
-      return Response.redirect(`${url.origin}/calendar?month=${currentMonth}`, 302);
+      return Response.redirect(`${url.origin}/today`, 302);
+    }
+
+    // Today live dashboard
+    if (url.pathname === "/today") {
+      const gate = await requireDashboardAuth(request, env, "html");
+      if (!gate.ok) return gate.response;
+      const snapshot = await buildTodaySnapshot(env);
+      return new Response(renderTodayDashboard(snapshot), {
+        headers: { "Content-Type": "text/html" },
+      });
+    }
+
+    if (url.pathname === "/api/today") {
+      const gate = await requireDashboardAuth(request, env, "json");
+      if (!gate.ok) return gate.response;
+      const snapshot = await buildTodaySnapshot(env);
+      return new Response(JSON.stringify(snapshot), {
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+
+    // Health / diagnostics
+    if (url.pathname === "/health") {
+      const gate = await requireDashboardAuth(request, env, "html");
+      if (!gate.ok) return gate.response;
+      const snapshot = await buildHealthSnapshot(env);
+      return new Response(renderHealthPage(snapshot), {
+        headers: { "Content-Type": "text/html" },
+      });
+    }
+
+    if (url.pathname === "/api/health") {
+      const gate = await requireDashboardAuth(request, env, "json");
+      if (!gate.ok) return gate.response;
+      const snapshot = await buildHealthSnapshot(env);
+      return new Response(JSON.stringify(snapshot), {
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+
+    // People directory
+    if (url.pathname === "/people") {
+      const gate = await requireDashboardAuth(request, env, "html");
+      if (!gate.ok) return gate.response;
+      const people = await getPeopleDirectory(env);
+      return new Response(renderPeopleDirectory(people), {
+        headers: { "Content-Type": "text/html" },
+      });
+    }
+
+    // Person profile: /people/:personKey
+    if (url.pathname.startsWith("/people/")) {
+      const gate = await requireDashboardAuth(request, env, "html");
+      if (!gate.ok) return gate.response;
+      const personKey = decodeURIComponent(url.pathname.slice("/people/".length));
+      if (!personKey) {
+        return Response.redirect(`${url.origin}/people`, 302);
+      }
+      const profile = await getPersonProfile(env, personKey);
+      if (!profile) {
+        return new Response(renderPersonNotFound(personKey), {
+          status: 404,
+          headers: { "Content-Type": "text/html" },
+        });
+      }
+      return new Response(renderPersonProfile(profile), {
+        headers: { "Content-Type": "text/html" },
+      });
+    }
+
+    // JSON person profile
+    if (url.pathname.startsWith("/api/people/")) {
+      const gate = await requireDashboardAuth(request, env, "json");
+      if (!gate.ok) return gate.response;
+      const personKey = decodeURIComponent(url.pathname.slice("/api/people/".length));
+      const profile = await getPersonProfile(env, personKey);
+      if (!profile) {
+        return new Response(JSON.stringify({ error: "Not found" }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify(profile), {
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     // 3. GET /calendar
@@ -268,7 +398,7 @@ export default {
     if (url.pathname === "/api/people") {
       const gate = await requireDashboardAuth(request, env, "json");
       if (!gate.ok) return gate.response;
-      const people = await getDistinctPeople(env);
+      const people = await getPeopleDirectory(env);
       return new Response(JSON.stringify(people), {
         headers: { "Content-Type": "application/json" }
       });
@@ -292,16 +422,31 @@ export default {
     ctx.waitUntil((async () => {
       try {
         await generateDailyReport(env, yesterdayStr);
+        await setCronReportOk(env, yesterdayStr, Date.now());
         console.log(`[Cron] Daily report successfully generated for ${yesterdayStr}`);
       } catch (err) {
         console.error(`[Cron] Error generating daily report for ${yesterdayStr}:`, err);
+        await setCronError(
+          env,
+          err instanceof Error ? err.message : String(err)
+        ).catch(() => undefined);
       }
 
       try {
         const cleanup = await runRetentionCleanup(env);
-        console.log(`[Cron] Retention cleanup completed: purged ${cleanup.purgedNotifications} webhooks, ${cleanup.purgedEvents} events, ${cleanup.purgedReports} reports`);
+        await setCleanupOk(env, {
+          purgedNotifications: cleanup.purgedNotifications,
+          purgedEvents: cleanup.purgedEvents,
+          purgedReports: cleanup.purgedReports,
+          purgedSessions: cleanup.purgedSessions,
+        });
+        console.log(`[Cron] Retention cleanup completed: purged ${cleanup.purgedNotifications} webhooks, ${cleanup.purgedEvents} events, ${cleanup.purgedReports} reports, ${cleanup.purgedSessions} sessions`);
       } catch (err) {
         console.error(`[Cron] Error running retention cleanup:`, err);
+        await setCronError(
+          env,
+          err instanceof Error ? err.message : String(err)
+        ).catch(() => undefined);
       }
     })());
   }

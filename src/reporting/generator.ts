@@ -1,31 +1,37 @@
 import { Env, DailyReport, FaceEvent } from "../types.js";
-import { getDistinctDatesForMonth, getEventsForDate, upsertDailyReport } from "../db/queries.js";
+import {
+  getDistinctDatesForMonth,
+  getEventsForDate,
+  replaceSessionsForDate,
+  upsertDailyReport,
+} from "../db/queries.js";
+import {
+  createGapResolver,
+  draftsToPresenceSessions,
+  sessionizeEvents,
+} from "./sessions.js";
+import { roundToNearest15Mins } from "./round.js";
+
+export { roundToNearest15Mins } from "./round.js";
 
 /**
- * Rounds milliseconds up to the nearest 15-minute interval
- */
-export function roundToNearest15Mins(ms: number): { roundedMinutes: number; roundedHours: number } {
-  const seconds = ms / 1000;
-  const minutes = seconds / 60;
-  
-  // Round up to nearest 15 minutes
-  const roundedMinutes = Math.ceil(minutes / 15) * 15;
-  const roundedHours = Number((roundedMinutes / 60).toFixed(2));
-  
-  return { roundedMinutes, roundedHours };
-}
-
-/**
- * Computes the daily report for a given local date based on all face_events.
- * This runs idempotently by replacing any existing report.
+ * Computes presence sessions and daily report for a given local date from face_events.
+ * Idempotent: replaces sessions for the date and upserts daily_person_reports.
  */
 export async function generateDailyReport(env: Env, localDate: string): Promise<void> {
   const events = await getEventsForDate(env, localDate);
   if (events.length === 0) {
+    await replaceSessionsForDate(env, localDate, []);
     return;
   }
 
-  // Group events by person_key
+  const gapResolver = createGapResolver(env);
+  const drafts = sessionizeEvents(events, gapResolver);
+  const generatedAtMs = Date.now();
+  const sessions = draftsToPresenceSessions(drafts, generatedAtMs);
+  await replaceSessionsForDate(env, localDate, sessions);
+
+  // Group events by person_key for first/last wall span
   const personGroups = new Map<string, FaceEvent[]>();
   for (const event of events) {
     const key = event.person_key;
@@ -35,10 +41,14 @@ export async function generateDailyReport(env: Env, localDate: string): Promise<
     personGroups.get(key)!.push(event);
   }
 
-  const generatedAtMs = Date.now();
+  const sessionsByPerson = new Map<string, typeof sessions>();
+  for (const session of sessions) {
+    const list = sessionsByPerson.get(session.person_key) || [];
+    list.push(session);
+    sessionsByPerson.set(session.person_key, list);
+  }
 
   for (const [personKey, groupEvents] of personGroups.entries()) {
-    // Sort by seen_at_ms asc just in case
     groupEvents.sort((a, b) => a.seen_at_ms - b.seen_at_ms);
 
     const firstEvent = groupEvents[0];
@@ -49,8 +59,14 @@ export async function generateDailyReport(env: Env, localDate: string): Promise<
 
     const rawSpanMs = lastSeenMs - firstSeenMs;
     const rawSpanSeconds = rawSpanMs / 1000;
-
     const { roundedMinutes, roundedHours } = roundToNearest15Mins(rawSpanMs);
+
+    const personSessions = sessionsByPerson.get(personKey) || [];
+    const observedSeconds = personSessions.reduce(
+      (sum, s) => sum + s.duration_seconds,
+      0
+    );
+    const observed = roundToNearest15Mins(observedSeconds * 1000);
 
     const report: DailyReport = {
       local_date: localDate,
@@ -67,6 +83,10 @@ export async function generateDailyReport(env: Env, localDate: string): Promise<
       last_camera_id: lastEvent.camera_id,
       seen_count: groupEvents.length,
       generated_at_ms: generatedAtMs,
+      observed_span_seconds: observedSeconds,
+      observed_rounded_minutes: observed.roundedMinutes,
+      observed_rounded_hours: observed.roundedHours,
+      session_count: personSessions.length,
     };
 
     await upsertDailyReport(env, report);
@@ -74,8 +94,8 @@ export async function generateDailyReport(env: Env, localDate: string): Promise<
 }
 
 /**
- * Ensures daily_person_reports exist for every local_date in the month that has face_events.
- * Used when cron is unavailable so calendar views stay populated from raw events.
+ * Ensures daily_person_reports (and presence_sessions) exist for every local_date
+ * in the month that has face_events.
  */
 export async function ensureReportsForMonth(env: Env, monthStr: string): Promise<void> {
   const dates = await getDistinctDatesForMonth(env, monthStr);

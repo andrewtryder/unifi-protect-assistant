@@ -5,11 +5,15 @@ A lightweight, premium Cloudflare Workers app that ingests webhook notifications
 ## Features
 
 - **Webhook Ingestion (`POST /unifi`)**: Authenticated webhook processing with schema parsing safeguards.
+- **Today dashboard**: Live landing page of who is present / was seen today, unknown-face counts, last-hour activity, webhook health, and a polling event stream (computed from `face_events`).
+- **People profiles**: Directory and `/people/:personKey` pages with typical arrival/departure, visit totals, camera frequency, heatmap, and recent thumbnails (keyed by stable `person_key`).
+- **Health diagnostics**: `/health` shows last webhook/event, hour/day volumes, ingest counters (rejects, duplicates, D1 failures), cron last runs, row counts, and config warnings.
+- **Presence sessions**: Gap-based sessionization (default 20 minutes) so daily totals reflect observed presence, not first-to-last wall clock.
 - **Person Tracking**: By default, captures all known people from UniFi Protect's Face Library (`face_known`) plus unrecognized faces (`face_unknown`). Optional `TARGET_PERSON_NAMES` / `TARGET_PERSON_IDS` env vars restrict ingestion to specific individuals.
 - **Person Filter Dropdown**: Calendar and Events Log views include a dropdown to filter by any detected person (or "All People").
-- **Reporting**: Computes first-seen, last-seen, total time (rounded up to the nearest 15 minutes), and frequency counts.
+- **Reporting**: Materializes `presence_sessions` and `daily_person_reports` (first/last wall span + observed presence hours).
 - **Aesthetic UI**: A modern glassmorphism calendar and event log UI rendered server-side for rapid, responsive mobile and desktop viewing. Event thumbnails are shown when available.
-- **Data Retention Policy**: Automated cleanup purging raw payloads after 30 days, and normalized events/reports after 365 days.
+- **Data Retention Policy**: Automated cleanup purging raw payloads after 30 days, and normalized events/reports/sessions after 365 days.
 
 ---
 
@@ -25,16 +29,22 @@ UniFi Protect NVR (Alarm Webhook)
  └─────┬─────┘───► Ingest to `face_events` (deduplicated by eventId)
        │
        ├─────────► Scheduled Cron Handler (once daily after midnight America/New_York)
-       │           ├─► Compute Yesterday's `daily_person_reports`
-       │           └─► Purge expired records (30 days raw / 1 yr events & reports)
+       │           ├─► Compute Yesterday's `presence_sessions` + `daily_person_reports`
+       │           └─► Purge expired records (30 days raw / 1 yr events, reports & sessions)
        │
        └─────────► Read-Only Web Interface (Google OAuth + ALLOWED_EMAILS)
                    ├─► GET /login (public)
-                   ├─► GET / (Redirects to current month; auth required)
+                   ├─► GET / → /today (live dashboard from face_events)
+                   ├─► GET /api/today (JSON snapshot for 15s polling)
+                   ├─► GET /people (directory by person_key)
+                   ├─► GET /people/:personKey (profile)
+                   ├─► GET /api/people (directory JSON)
+                   ├─► GET /api/people/:personKey (profile JSON)
+                   ├─► GET /health (diagnostics)
+                   ├─► GET /api/health (diagnostics JSON)
                    ├─► GET /calendar?month=YYYY-MM&person=Name
                    ├─► GET /events?date=YYYY-MM-DD&person=Name
                    ├─► GET /api/auth/* (better-auth)
-                   ├─► GET /api/people
                    ├─► GET /api/reports?month=YYYY-MM&person=Name
                    └─► GET /api/events?date=YYYY-MM-DD&person=Name
 ```
@@ -81,6 +91,9 @@ TARGET_PERSON_IDS = ""    # Optional: comma-separated UniFi face IDs to restrict
 WATCH_CAMERA_IDS = ""     # Optional list to narrow down cameras
 ALLOWED_EMAILS = ""       # Comma-separated Google emails allowed to sign in
 BETTER_AUTH_URL = "https://unifi-protect-assistant.mrcoffee.workers.dev"
+PRESENCE_GAP_MINUTES = "20"   # Minutes between sightings before a new presence session
+PRESENCE_GAP_BY_PERSON = ""   # Optional JSON: {"id:personKey": 45}
+PRESENCE_GAP_BY_CAMERA = ""   # Optional JSON: {"camera-id": 5} (same-camera consecutive events)
 
 [[d1_databases]]
 binding = "DB"
@@ -127,6 +140,29 @@ npm run dev
 By default (with `TARGET_PERSON_NAMES` and `TARGET_PERSON_IDS` left blank), the app ingests every face detection UniFi Protect sends — all named people from your Face Library plus unrecognized faces (`Unknown`). Use the **Person** dropdown on the Calendar and Events Log pages to filter the view to a single individual, or leave it on **All People** for the combined view.
 
 Set `TARGET_PERSON_NAMES` and/or `TARGET_PERSON_IDS` only if you want to restrict which detections are stored at ingestion time (e.g. privacy or opt-in tracking for specific individuals). The UI dropdown always reflects whoever has been ingested into the database.
+
+### Presence sessions
+
+Sightings are grouped into sessions when consecutive detections for the same person fall within `PRESENCE_GAP_MINUTES` (default 20). Larger gaps start a new session. Daily observed presence is the sum of session durations (rounded up to 15 minutes per session total for display hours). The calendar shows **observed** hours; tooltips still include the first–last wall-clock span for comparison.
+
+The **Today** page recomputes this live from `face_events` every request/poll. Historical months are materialized into `presence_sessions` when the calendar loads (`ensureReportsForMonth`) or via the nightly cron.
+
+### Person profiles
+
+Each detected identity has a stable `person_key` (`id:…` when UniFi provides a face ID, otherwise `name:…`). Open **People** in the nav or visit `/people/<urlencoded-person_key>` (example: `/people/id%3Aabc123`). Profiles show lifetime first/last seen, observed visit totals from presence sessions, median typical arrival/departure (90 days), top cameras, a 12-month heatmap, and recent thumbnails.
+
+### Health diagnostics
+
+Authenticated users can open **Health** (`/health`) for:
+
+- Last webhook received and last normalized `face_events` timestamp
+- Event/webhook volumes for the past hour and day
+- Today’s KV counters: rejected auth, invalid JSON (parsing failures), duplicates, zero-face webhooks, D1 write failures
+- Most recent cron report/cleanup timestamps (written by the scheduled worker)
+- D1 row counts (byte size remains in the Cloudflare dashboard)
+- Configuration warnings (missing secrets, empty allowlist, bad gap JSON)
+
+Reject/duplicate counters start at zero after deploy and accumulate in KV per local calendar day (~40 day TTL).
 
 ---
 

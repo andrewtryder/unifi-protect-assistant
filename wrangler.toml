@@ -12,6 +12,10 @@ WATCH_CAMERA_IDS = ""
 ALLOWED_EMAILS = "atr000@gmail.com"
 BETTER_AUTH_URL = "https://unifi-protect-assistant.mrcoffee.workers.dev"
 
+PRESENCE_GAP_MINUTES = "20"
+PRESENCE_GAP_BY_PERSON = ""
+PRESENCE_GAP_BY_CAMERA = ""
+
 [[d1_databases]]
 binding = "DB"
 database_name = "unifi_protect_db"
@@ -21,5 +25,5 @@ database_id = "605b47aa-684c-425b-8eac-ce8f508a7cdd"
 binding = "KV"
 id = "c66e834e4d7b484cb5eef270ee92493e"
 
-# [triggers]
-# crons = ["0 6 * * *"] # 6:00 AM UTC = 2:00 AM EST (safely after midnight ET)
+[triggers]
+crons = ["0 6 * * *"] # 6:00 AM UTC = 2:00 AM EST (safely after midnight ET)

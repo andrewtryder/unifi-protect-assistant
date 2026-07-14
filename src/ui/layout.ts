@@ -218,8 +218,11 @@ export function renderLayout(
   <header>
     <h1>UniFi Protect Assistant</h1>
     <nav>
+      <a href="/today" id="nav-today">Today</a>
+      <a href="/people" id="nav-people">People</a>
       <a href="${calendarHref}" id="nav-calendar">Calendar</a>
       <a href="${eventsHref}" id="nav-events">Events Log</a>
+      <a href="/health" id="nav-health">Health</a>
       <button type="button" class="sign-out" id="sign-out">Sign out</button>
     </nav>
   </header>
@@ -235,7 +238,13 @@ export function renderLayout(
   <script>
     // Set active class on nav links
     const path = window.location.pathname;
-    if (path.startsWith('/events')) {
+    if (path.startsWith('/today')) {
+      document.getElementById('nav-today').classList.add('active');
+    } else if (path.startsWith('/people')) {
+      document.getElementById('nav-people').classList.add('active');
+    } else if (path.startsWith('/health')) {
+      document.getElementById('nav-health').classList.add('active');
+    } else if (path.startsWith('/events')) {
       document.getElementById('nav-events').classList.add('active');
     } else {
       document.getElementById('nav-calendar').classList.add('active');

@@ -1,7 +1,14 @@
 import { Env, FaceEvent } from "../types.js";
 
+export interface IngestResult {
+  eventsAttempted: number;
+  eventsInserted: number;
+  duplicates: number;
+}
+
 /**
- * Inserts the raw webhook notification and normalized face events using prepared statements inside a D1 transaction.
+ * Inserts the raw webhook notification and normalized face events using prepared statements inside a D1 batch.
+ * Face events use INSERT OR IGNORE (unique event_id); duplicates are counted from meta.changes.
  */
 export async function ingestWebhook(
   env: Env,
@@ -13,7 +20,7 @@ export async function ingestWebhook(
   rawPayload: string,
   faceEvents: FaceEvent[],
   imageBase64?: string
-): Promise<void> {
+): Promise<IngestResult> {
   const insertNotificationStmt = env.DB.prepare(`
     INSERT INTO webhook_notifications (id, received_at_ms, source_ip, event_id, alarm_name, payload_json, image_base64)
     VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -46,6 +53,20 @@ export async function ingestWebhook(
     statements.push(insertEventStmt);
   }
 
-  // Execute all inside a transaction
-  await env.DB.batch(statements);
+  const results = await env.DB.batch(statements);
+
+  let eventsInserted = 0;
+  let duplicates = 0;
+  // results[0] is the notification insert; results[1..] are face event inserts
+  for (let i = 1; i < results.length; i++) {
+    const changes = results[i].meta?.changes ?? 0;
+    if (changes > 0) eventsInserted += 1;
+    else duplicates += 1;
+  }
+
+  return {
+    eventsAttempted: faceEvents.length,
+    eventsInserted,
+    duplicates,
+  };
 }

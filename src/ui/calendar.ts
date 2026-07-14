@@ -57,9 +57,14 @@ export function renderCalendar(
       reportsHtml = dayReports.map(r => {
         const firstTime = new Date(r.first_seen_ms).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hour12: false });
         const lastTime = new Date(r.last_seen_ms).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hour12: false });
-        const tooltip = `${r.person_name}: ${firstTime} - ${lastTime} (${r.rounded_span_hours} hrs)`;
+        const observedHours = r.observed_rounded_hours ?? r.rounded_span_hours;
+        const sessions = r.session_count != null ? `, ${r.session_count} session${r.session_count === 1 ? "" : "s"}` : "";
+        const wallHint = r.observed_rounded_hours != null
+          ? `; wall ${r.rounded_span_hours}h first–last`
+          : "";
+        const tooltip = `${r.person_name}: ${firstTime}–${lastTime}, observed ${observedHours}h${sessions}${wallHint}`;
         return `<div class="person-tag" title="${tooltip}">
-          <span class="dot"></span>${r.person_name} <strong>${r.rounded_span_hours}h</strong>
+          <span class="dot"></span>${r.person_name} <strong>${observedHours}h</strong>
         </div>`;
       }).join("");
     }
