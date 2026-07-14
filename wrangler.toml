@@ -25,5 +25,7 @@ database_id = "605b47aa-684c-425b-8eac-ce8f508a7cdd"
 binding = "KV"
 id = "c66e834e4d7b484cb5eef270ee92493e"
 
-[triggers]
-crons = ["0 6 * * *"] # 6:00 AM UTC = 2:00 AM EST (safely after midnight ET)
+# Cron disabled: this Cloudflare account is at the Free plan 5-trigger limit
+# (API 10072). Re-enable after freeing a slot or upgrading Workers:
+# [triggers]
+# crons = ["0 6 * * *"] # 6:00 AM UTC ≈ 2:00 AM ET
