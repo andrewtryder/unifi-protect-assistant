@@ -69,6 +69,23 @@ export interface FaceEvent {
   image_base64?: string;
 }
 
+export interface VehicleEvent {
+  id: string;
+  notification_id: string;
+  event_id: string;
+  seen_at_ms: number;
+  local_date: string; // YYYY-MM-DD
+  /** Normalized plate identity: plate:ABC123 or plate:unknown */
+  plate_key: string;
+  /** Raw plate text from trigger.value (may be empty on test fires) */
+  plate_text: string;
+  trigger_key: string;
+  camera_id: string;
+  alarm_name: string;
+  raw_trigger_json: string;
+  image_base64?: string;
+}
+
 export interface DailyReport {
   local_date: string;
   person_key: string;
@@ -209,6 +226,7 @@ export interface WebhookNotification {
 export interface HealthDbUsage {
   webhook_notifications: number;
   face_events: number;
+  vehicle_events: number;
   daily_person_reports: number;
   presence_sessions: number;
 }
@@ -230,6 +248,9 @@ export interface HealthSnapshot {
     events_attempted: number;
     events_inserted: number;
     duplicates: number;
+    vehicles_attempted: number;
+    vehicles_inserted: number;
+    vehicle_duplicates: number;
     zero_face_webhooks: number;
     d1_failures: number;
   };

@@ -1,0 +1,31 @@
+{
+  "alarm": {
+    "name": "New Alarm",
+    "sources": [
+      { "device": "28704E169AD5", "type": "include" },
+      { "device": "28704E169BE6", "type": "include" }
+    ],
+    "conditions": [
+      { "condition": { "type": "is", "source": "license_plate_known" } },
+      {
+        "condition": {
+          "type": "is",
+          "source": "license_plate_wildcard",
+          "value": "{\"sensitivity\":50,\"regex\":\"4444\"}"
+        }
+      }
+    ],
+    "triggers": [
+      {
+        "key": "license_plate_known",
+        "device": "FAKE_MAC",
+        "value": "4444",
+        "eventId": "plate-event-id",
+        "timestamp": 1784066832999
+      }
+    ],
+    "eventPath": "/protect/events/event/plate-event-id",
+    "eventLocalLink": "https://192.168.88.1/protect/events/event/plate-event-id"
+  },
+  "timestamp": 1784066833006
+}

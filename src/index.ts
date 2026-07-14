@@ -156,9 +156,10 @@ export default {
         }
 
         const notificationId = crypto.randomUUID();
-        const faceEvents = parseWebhookPayload(payload, notificationId, env);
+        const { faceEvents, vehicleEvents } = parseWebhookPayload(payload, notificationId, env);
 
-        if (faceEvents.length === 0) {
+        // No face or plate detections extracted from this payload
+        if (faceEvents.length === 0 && vehicleEvents.length === 0) {
           ctx.waitUntil(incrementCounter(env, "zero_face_webhooks").catch(() => undefined));
         }
 
@@ -179,7 +180,8 @@ export default {
           alarmName,
           rawBody,
           faceEvents,
-          imageBase64
+          imageBase64,
+          vehicleEvents
         );
 
         ctx.waitUntil((async () => {
@@ -193,6 +195,15 @@ export default {
           if (ingestResult.duplicates > 0) {
             await incrementCounter(env, "duplicates", ingestResult.duplicates);
           }
+          if (ingestResult.vehiclesAttempted > 0) {
+            await incrementCounter(env, "vehicles_attempted", ingestResult.vehiclesAttempted);
+          }
+          if (ingestResult.vehiclesInserted > 0) {
+            await incrementCounter(env, "vehicles_inserted", ingestResult.vehiclesInserted);
+          }
+          if (ingestResult.vehicleDuplicates > 0) {
+            await incrementCounter(env, "vehicle_duplicates", ingestResult.vehicleDuplicates);
+          }
         })().catch(() => undefined));
 
         return new Response(JSON.stringify({
@@ -200,6 +211,9 @@ export default {
           events_ingested: ingestResult.eventsInserted,
           events_attempted: ingestResult.eventsAttempted,
           duplicates: ingestResult.duplicates,
+          vehicles_ingested: ingestResult.vehiclesInserted,
+          vehicles_attempted: ingestResult.vehiclesAttempted,
+          vehicle_duplicates: ingestResult.vehicleDuplicates,
         }), {
           status: 200,
           headers: { "Content-Type": "application/json" }

@@ -1,0 +1,18 @@
+{
+  "alarm": {
+    "name": "Alarm Manager Test",
+    "conditions": [
+      { "condition": { "type": "is", "source": "license_plate_known" } }
+    ],
+    "triggers": [
+      {
+        "key": "license_plate_known",
+        "device": "FAKE_MAC",
+        "eventId": "testEventId",
+        "timestamp": 1784066832999
+      }
+    ],
+    "eventPath": "/protect/events/event/testEventId"
+  },
+  "timestamp": 1784066833006
+}

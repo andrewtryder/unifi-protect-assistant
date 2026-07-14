@@ -481,6 +481,7 @@ export async function getHealthDbFacts(env: Env, nowMs: number = Date.now()): Pr
   db_usage: {
     webhook_notifications: number;
     face_events: number;
+    vehicle_events: number;
     daily_person_reports: number;
     presence_sessions: number;
   };
@@ -497,6 +498,7 @@ export async function getHealthDbFacts(env: Env, nowMs: number = Date.now()): Pr
     webhooksDay,
     countWebhooks,
     countEvents,
+    countVehicles,
     countReports,
     countSessions,
   ] = await Promise.all([
@@ -508,6 +510,7 @@ export async function getHealthDbFacts(env: Env, nowMs: number = Date.now()): Pr
     env.DB.prepare(`SELECT COUNT(*) AS c FROM webhook_notifications WHERE received_at_ms >= ?`).bind(dayAgo).first<{ c: number }>(),
     env.DB.prepare(`SELECT COUNT(*) AS c FROM webhook_notifications`).first<{ c: number }>(),
     env.DB.prepare(`SELECT COUNT(*) AS c FROM face_events`).first<{ c: number }>(),
+    env.DB.prepare(`SELECT COUNT(*) AS c FROM vehicle_events`).first<{ c: number }>(),
     env.DB.prepare(`SELECT COUNT(*) AS c FROM daily_person_reports`).first<{ c: number }>(),
     env.DB.prepare(`SELECT COUNT(*) AS c FROM presence_sessions`).first<{ c: number }>(),
   ]);
@@ -522,6 +525,7 @@ export async function getHealthDbFacts(env: Env, nowMs: number = Date.now()): Pr
     db_usage: {
       webhook_notifications: countWebhooks?.c ?? 0,
       face_events: countEvents?.c ?? 0,
+      vehicle_events: countVehicles?.c ?? 0,
       daily_person_reports: countReports?.c ?? 0,
       presence_sessions: countSessions?.c ?? 0,
     },

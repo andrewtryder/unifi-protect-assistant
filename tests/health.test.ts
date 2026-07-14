@@ -130,6 +130,69 @@ describe("ingestWebhook stats", () => {
       eventsAttempted: 2,
       eventsInserted: 1,
       duplicates: 1,
+      vehiclesAttempted: 0,
+      vehiclesInserted: 0,
+      vehicleDuplicates: 0,
+    });
+  });
+
+  it("counts vehicle inserts separately from faces", async () => {
+    const batchMeta = [
+      { meta: { changes: 1 } }, // notification
+      { meta: { changes: 1 } }, // face
+      { meta: { changes: 1 } }, // vehicle insert
+      { meta: { changes: 0 } }, // vehicle duplicate
+    ];
+    const env = {
+      DB: {
+        prepare() {
+          return {
+            bind() {
+              return {};
+            },
+          };
+        },
+        async batch() {
+          return batchMeta;
+        },
+      },
+      KV: {} as KVNamespace,
+    } as unknown as Env;
+
+    const vehicle = {
+      id: "v1",
+      notification_id: "n1",
+      event_id: "ve1",
+      seen_at_ms: 1000,
+      local_date: "2025-07-14",
+      plate_key: "plate:4444",
+      plate_text: "4444",
+      trigger_key: "license_plate_known",
+      camera_id: "cam",
+      alarm_name: "A",
+      raw_trigger_json: "{}",
+    };
+
+    const result = await ingestWebhook(
+      env,
+      "notif",
+      1,
+      "0.0.0.0",
+      "e",
+      "alarm",
+      "{}",
+      [face("e1")],
+      undefined,
+      [vehicle, { ...vehicle, id: "v2", event_id: "ve2" }]
+    );
+
+    expect(result).toEqual({
+      eventsAttempted: 1,
+      eventsInserted: 1,
+      duplicates: 0,
+      vehiclesAttempted: 2,
+      vehiclesInserted: 1,
+      vehicleDuplicates: 1,
     });
   });
 });

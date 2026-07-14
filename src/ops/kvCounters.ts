@@ -9,6 +9,9 @@ export type OpsCounterField =
   | "events_attempted"
   | "events_inserted"
   | "duplicates"
+  | "vehicles_attempted"
+  | "vehicles_inserted"
+  | "vehicle_duplicates"
   | "zero_face_webhooks"
   | "d1_failures";
 
@@ -19,6 +22,9 @@ export interface DailyOpsCounters {
   events_attempted: number;
   events_inserted: number;
   duplicates: number;
+  vehicles_attempted: number;
+  vehicles_inserted: number;
+  vehicle_duplicates: number;
   zero_face_webhooks: number;
   d1_failures: number;
 }
@@ -31,6 +37,9 @@ export function emptyCounters(): DailyOpsCounters {
     events_attempted: 0,
     events_inserted: 0,
     duplicates: 0,
+    vehicles_attempted: 0,
+    vehicles_inserted: 0,
+    vehicle_duplicates: 0,
     zero_face_webhooks: 0,
     d1_failures: 0,
   };

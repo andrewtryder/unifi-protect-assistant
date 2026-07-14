@@ -152,10 +152,13 @@ export function renderHealthPage(snapshot: HealthSnapshot): string {
               <th>Rejected auth</th>
               <th>Invalid JSON</th>
               <th>Ingested</th>
-              <th>Events attempted</th>
-              <th>Inserted</th>
-              <th>Duplicates</th>
-              <th>Zero-face</th>
+              <th>Faces attempted</th>
+              <th>Faces inserted</th>
+              <th>Face dupes</th>
+              <th>Plates attempted</th>
+              <th>Plates inserted</th>
+              <th>Plate dupes</th>
+              <th>Zero detections</th>
               <th>D1 failures</th>
             </tr>
           </thead>
@@ -167,13 +170,16 @@ export function renderHealthPage(snapshot: HealthSnapshot): string {
               <td>${c.events_attempted}</td>
               <td>${c.events_inserted}</td>
               <td>${c.duplicates}</td>
+              <td>${c.vehicles_attempted}</td>
+              <td>${c.vehicles_inserted}</td>
+              <td>${c.vehicle_duplicates}</td>
               <td>${c.zero_face_webhooks}</td>
               <td>${c.d1_failures}</td>
             </tr>
           </tbody>
         </table>
       </div>
-      <p class="kv-note">Parsing failures = Invalid JSON. Zero-face means a valid payload stored with no face events after filters.</p>
+      <p class="kv-note">Parsing failures = Invalid JSON. Zero detections means a valid payload stored with no face or plate events after filters.</p>
       ${
         snapshot.last_d1_error
           ? `<p class="error-box">Last D1 error (${formatWhen(snapshot.last_d1_error_at_ms)}): ${esc(snapshot.last_d1_error)}</p>`
@@ -218,6 +224,7 @@ export function renderHealthPage(snapshot: HealthSnapshot): string {
             <tr>
               <th>webhook_notifications</th>
               <th>face_events</th>
+              <th>vehicle_events</th>
               <th>daily_person_reports</th>
               <th>presence_sessions</th>
             </tr>
@@ -226,6 +233,7 @@ export function renderHealthPage(snapshot: HealthSnapshot): string {
             <tr>
               <td>${snapshot.db_usage.webhook_notifications}</td>
               <td>${snapshot.db_usage.face_events}</td>
+              <td>${snapshot.db_usage.vehicle_events}</td>
               <td>${snapshot.db_usage.daily_person_reports}</td>
               <td>${snapshot.db_usage.presence_sessions}</td>
             </tr>
