@@ -26,8 +26,8 @@ export interface Env {
 
 export interface UnifiTrigger {
   device: string; // camera ID
-  value: string;  // e.g., "Example Person" (person_name)
-  key: string;    // e.g., "face_known" (trigger_key)
+  value: string; // e.g., "Example Person" (person_name)
+  key: string; // e.g., "face_known" (trigger_key)
   group?: {
     name: string;
   };
@@ -43,7 +43,7 @@ export interface UnifiAlarm {
       type: string;
       source: string;
       value: string; // e.g. "example-person-id"
-    }
+    };
   }>;
   triggers: UnifiTrigger[];
   eventPath: string;

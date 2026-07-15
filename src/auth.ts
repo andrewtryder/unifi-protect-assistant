@@ -4,17 +4,20 @@ import { dash } from "@better-auth/infra";
 import type { Env } from "./types.js";
 import { isEmailAllowed } from "./auth-allowlist.js";
 
-const DEFAULT_BASE_URL = "https://unifi-protect-assistant.mrcoffee.workers.dev";
-
 export { isEmailAllowed, parseAllowedEmails } from "./auth-allowlist.js";
 
-export function createAuth(env: Env, baseURL?: string) {
-  const resolvedBaseURL = baseURL || env.BETTER_AUTH_URL || DEFAULT_BASE_URL;
+export function createAuth(env: Env) {
+  const baseURL = env.BETTER_AUTH_URL?.trim();
+
+  if (!baseURL) {
+    throw new Error("BETTER_AUTH_URL is required");
+  }
 
   return betterAuth({
     appName: "UniFi Protect Assistant",
     database: env.DB,
-    baseURL: resolvedBaseURL,
+    baseURL,
+    trustedOrigins: [baseURL],
     secret: env.BETTER_AUTH_SECRET,
     socialProviders: {
       google: {
@@ -28,9 +31,10 @@ export function createAuth(env: Env, baseURL?: string) {
       }),
     ],
     advanced: {
+      useSecureCookies: true,
       ipAddress: {
-        // Cloudflare sets the true client IP; x-forwarded-for as fallback
-        ipAddressHeaders: ["cf-connecting-ip", "x-forwarded-for"],
+        // Cloudflare's single original-client IP; do not fall back to X-Forwarded-For
+        ipAddressHeaders: ["cf-connecting-ip"],
       },
     },
     experimental: {

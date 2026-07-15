@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  emptyCounters,
-  mergeCounters,
-  parseCountersJson,
-} from "../src/ops/kvCounters.js";
+import { emptyCounters, mergeCounters, parseCountersJson } from "../src/ops/kvCounters.js";
 import { getConfigWarnings } from "../src/ops/configWarnings.js";
 import type { Env } from "../src/types.js";
 import { ingestWebhook } from "../src/webhook/ingester.js";
@@ -13,7 +9,9 @@ describe("ops counter helpers", () => {
   it("merges increments", () => {
     const base = emptyCounters();
     expect(mergeCounters(base, "duplicates", 3).duplicates).toBe(3);
-    expect(mergeCounters(mergeCounters(base, "rejected_json"), "rejected_json").rejected_json).toBe(2);
+    expect(mergeCounters(mergeCounters(base, "rejected_json"), "rejected_json").rejected_json).toBe(
+      2
+    );
   });
 
   it("parses counter JSON with defaults", () => {
@@ -43,6 +41,7 @@ describe("getConfigWarnings", () => {
       GOOGLE_CLIENT_ID: "id",
       GOOGLE_CLIENT_SECRET: "secret",
     });
+    expect(warnings.some((w) => w.includes("BETTER_AUTH_URL"))).toBe(true);
     expect(warnings.some((w) => w.includes("BETTER_AUTH_SECRET"))).toBe(true);
     expect(warnings.some((w) => w.includes("BETTER_AUTH_API_KEY"))).toBe(true);
     expect(warnings.some((w) => w.includes("HONEYBADGER_API_KEY"))).toBe(true);
@@ -55,6 +54,7 @@ describe("getConfigWarnings", () => {
       ALLOWED_EMAILS: "a@b.com",
       GOOGLE_CLIENT_ID: "id",
       GOOGLE_CLIENT_SECRET: "secret",
+      BETTER_AUTH_URL: "https://example.com",
       BETTER_AUTH_SECRET: "secret-secret-secret-secret-secret",
       BETTER_AUTH_API_KEY: "ba_test",
       HONEYBADGER_API_KEY: "hb_test",
@@ -70,6 +70,7 @@ describe("getConfigWarnings", () => {
       ALLOWED_EMAILS: "a@b.com",
       GOOGLE_CLIENT_ID: "id",
       GOOGLE_CLIENT_SECRET: "secret",
+      BETTER_AUTH_URL: "https://example.com",
       BETTER_AUTH_SECRET: "secret-secret-secret-secret-secret",
       BETTER_AUTH_API_KEY: "ba_test",
       HONEYBADGER_API_KEY: "hb_test",
@@ -118,16 +119,10 @@ describe("ingestWebhook stats", () => {
       KV: {} as KVNamespace,
     } as unknown as Env;
 
-    const result = await ingestWebhook(
-      env,
-      "notif",
-      1,
-      "0.0.0.0",
-      "e",
-      "alarm",
-      "{}",
-      [face("e1"), face("e2")]
-    );
+    const result = await ingestWebhook(env, "notif", 1, "0.0.0.0", "e", "alarm", "{}", [
+      face("e1"),
+      face("e2"),
+    ]);
 
     expect(result).toEqual({
       eventsAttempted: 2,

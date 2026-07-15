@@ -85,9 +85,7 @@ describe("ensureReportsForMonth", () => {
           const prefix = String(boundArgs[0]).replace("%", "");
           const dates = [
             ...new Set(
-              events
-                .filter((e) => e.local_date.startsWith(prefix))
-                .map((e) => e.local_date)
+              events.filter((e) => e.local_date.startsWith(prefix)).map((e) => e.local_date)
             ),
           ].sort();
           return { results: dates.map((local_date) => ({ local_date })) as T[] };

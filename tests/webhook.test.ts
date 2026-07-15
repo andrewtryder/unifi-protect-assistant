@@ -13,7 +13,7 @@ describe("Webhook Parser & Matching Tests", () => {
   const mockEnv: Env = {
     DB: {} as any,
     KV: {} as any,
-    TIMEZONE: "America/New_York"
+    TIMEZONE: "America/New_York",
   };
 
   it("should extract fields correctly from a known face trigger", () => {
@@ -45,7 +45,7 @@ describe("Webhook Parser & Matching Tests", () => {
   it("should filter by target name if configured", () => {
     const envWithNameFilter: Env = {
       ...mockEnv,
-      TARGET_PERSON_NAMES: "Example Person"
+      TARGET_PERSON_NAMES: "Example Person",
     };
 
     const matched = parseWebhookPayload(sampleKnown, "notif-123", envWithNameFilter);
@@ -58,7 +58,7 @@ describe("Webhook Parser & Matching Tests", () => {
   it("should filter by target ID if configured", () => {
     const envWithIdFilter: Env = {
       ...mockEnv,
-      TARGET_PERSON_IDS: "example-person-id"
+      TARGET_PERSON_IDS: "example-person-id",
     };
 
     const matched = parseWebhookPayload(sampleKnown, "notif-123", envWithIdFilter);
@@ -72,7 +72,7 @@ describe("Webhook Parser & Matching Tests", () => {
     const envWithBothFilters: Env = {
       ...mockEnv,
       TARGET_PERSON_NAMES: "Some Other Person",
-      TARGET_PERSON_IDS: "some-other-id"
+      TARGET_PERSON_IDS: "some-other-id",
     };
 
     const matched = parseWebhookPayload(sampleKnown, "notif-123", envWithBothFilters);
@@ -103,9 +103,7 @@ describe("Webhook Parser & Matching Tests", () => {
     const mixed = {
       alarm: {
         name: "Mixed",
-        conditions: [
-          { condition: { type: "is", source: "face_known", value: "pid" } },
-        ],
+        conditions: [{ condition: { type: "is", source: "face_known", value: "pid" } }],
         triggers: [
           {
             device: "cam1",
@@ -199,11 +197,7 @@ describe("parseWebhookPayload image handling", () => {
   });
 
   it("stores bare jpeg base64", () => {
-    const { faceEvents } = parseWebhookPayload(
-      payloadWithImage(VALID_JPEG_B64),
-      "n-img",
-      mockEnv
-    );
+    const { faceEvents } = parseWebhookPayload(payloadWithImage(VALID_JPEG_B64), "n-img", mockEnv);
     expect(faceEvents[0].image_base64).toBe(VALID_JPEG_B64);
   });
 

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createAuth } from "../src/auth.js";
 import { isEmailAllowed, parseAllowedEmails } from "../src/auth-allowlist.js";
 import type { Env } from "../src/types.js";
 
@@ -34,5 +35,11 @@ describe("isEmailAllowed", () => {
 
   it("denies everyone when allowlist is empty", () => {
     expect(isEmailAllowed("you@gmail.com", envWithEmails(""))).toBe(false);
+  });
+});
+
+describe("createAuth", () => {
+  it("requires BETTER_AUTH_URL", () => {
+    expect(() => createAuth(envWithEmails("a@b.com"))).toThrow("BETTER_AUTH_URL is required");
   });
 });

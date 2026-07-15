@@ -5,11 +5,7 @@ import {
   replaceSessionsForDate,
   upsertDailyReport,
 } from "../db/queries.js";
-import {
-  createGapResolver,
-  draftsToPresenceSessions,
-  sessionizeEvents,
-} from "./sessions.js";
+import { createGapResolver, draftsToPresenceSessions, sessionizeEvents } from "./sessions.js";
 import { roundToNearest15Mins } from "./round.js";
 
 export { roundToNearest15Mins } from "./round.js";
@@ -62,10 +58,7 @@ export async function generateDailyReport(env: Env, localDate: string): Promise<
     const { roundedMinutes, roundedHours } = roundToNearest15Mins(rawSpanMs);
 
     const personSessions = sessionsByPerson.get(personKey) || [];
-    const observedSeconds = personSessions.reduce(
-      (sum, s) => sum + s.duration_seconds,
-      0
-    );
+    const observedSeconds = personSessions.reduce((sum, s) => sum + s.duration_seconds, 0);
     const observed = roundToNearest15Mins(observedSeconds * 1000);
 
     const report: DailyReport = {

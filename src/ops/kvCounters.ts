@@ -68,10 +68,7 @@ function counterDay(env: Env, nowMs: number = Date.now()): string {
   return getLocalDate(nowMs, env.TIMEZONE || "America/New_York");
 }
 
-export async function getCountersForDate(
-  env: Env,
-  localDate: string
-): Promise<DailyOpsCounters> {
+export async function getCountersForDate(env: Env, localDate: string): Promise<DailyOpsCounters> {
   const raw = await env.KV.get(countersKeyForDate(localDate));
   return parseCountersJson(raw);
 }
@@ -115,13 +112,24 @@ export async function setCleanupOk(
   await env.KV.put(OPS_KEYS.lastCleanupSummary, JSON.stringify(summary));
 }
 
-export async function setD1Error(env: Env, message: string, atMs: number = Date.now()): Promise<void> {
+export async function setD1Error(
+  env: Env,
+  message: string,
+  atMs: number = Date.now()
+): Promise<void> {
   await env.KV.put(OPS_KEYS.lastD1ErrorAt, String(atMs));
   await env.KV.put(OPS_KEYS.lastD1Error, message.slice(0, 500));
 }
 
-export async function setCronError(env: Env, message: string, atMs: number = Date.now()): Promise<void> {
-  await env.KV.put(OPS_KEYS.lastCronError, JSON.stringify({ at_ms: atMs, message: message.slice(0, 500) }));
+export async function setCronError(
+  env: Env,
+  message: string,
+  atMs: number = Date.now()
+): Promise<void> {
+  await env.KV.put(
+    OPS_KEYS.lastCronError,
+    JSON.stringify({ at_ms: atMs, message: message.slice(0, 500) })
+  );
 }
 
 export async function readOpsMarkers(env: Env): Promise<{
@@ -133,23 +141,17 @@ export async function readOpsMarkers(env: Env): Promise<{
   last_d1_error: string | null;
   last_cron_error: { at_ms: number; message: string } | null;
 }> {
-  const [
-    reportAt,
-    reportDate,
-    cleanupAt,
-    cleanupSummary,
-    d1At,
-    d1Err,
-    cronErr,
-  ] = await Promise.all([
-    env.KV.get(OPS_KEYS.lastCronReportAt),
-    env.KV.get(OPS_KEYS.lastCronReportDate),
-    env.KV.get(OPS_KEYS.lastCleanupAt),
-    env.KV.get(OPS_KEYS.lastCleanupSummary),
-    env.KV.get(OPS_KEYS.lastD1ErrorAt),
-    env.KV.get(OPS_KEYS.lastD1Error),
-    env.KV.get(OPS_KEYS.lastCronError),
-  ]);
+  const [reportAt, reportDate, cleanupAt, cleanupSummary, d1At, d1Err, cronErr] = await Promise.all(
+    [
+      env.KV.get(OPS_KEYS.lastCronReportAt),
+      env.KV.get(OPS_KEYS.lastCronReportDate),
+      env.KV.get(OPS_KEYS.lastCleanupAt),
+      env.KV.get(OPS_KEYS.lastCleanupSummary),
+      env.KV.get(OPS_KEYS.lastD1ErrorAt),
+      env.KV.get(OPS_KEYS.lastD1Error),
+      env.KV.get(OPS_KEYS.lastCronError),
+    ]
+  );
 
   let last_cleanup_summary: Record<string, number> | null = null;
   if (cleanupSummary) {

@@ -18,33 +18,34 @@ export function renderEventsLog(
   people: PersonSummary[],
   selectedPerson?: string
 ): string {
-  let rowsHtml = "";
+  let rowsHtml: string;
   if (events.length === 0) {
     const emptyMessage = selectedPerson
       ? `No recognition events for ${escapeHtml(selectedPerson)} on this date.`
       : "No recognition events recorded for this date.";
     rowsHtml = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 3rem 1rem;">${emptyMessage}</td></tr>`;
   } else {
-    rowsHtml = events.map(e => {
-      const timeStr = new Date(e.seen_at_ms).toLocaleTimeString("en-US", {
-        timeZone: "America/New_York",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: false
-      });
+    rowsHtml = events
+      .map((e) => {
+        const timeStr = new Date(e.seen_at_ms).toLocaleTimeString("en-US", {
+          timeZone: "America/New_York",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        });
 
-      let imageCell = `<span class="no-image">&mdash;</span>`;
-      if (e.image_base64) {
-        const src = formatImageSrc(e.image_base64);
-        if (src) {
-          imageCell = `<a href="${src}" target="_blank" rel="noopener noreferrer" class="event-thumb-link">
+        let imageCell = `<span class="no-image">&mdash;</span>`;
+        if (e.image_base64) {
+          const src = formatImageSrc(e.image_base64);
+          if (src) {
+            imageCell = `<a href="${src}" target="_blank" rel="noopener noreferrer" class="event-thumb-link">
           <img src="${src}" alt="Detection thumbnail" class="event-thumb" loading="lazy" />
         </a>`;
+          }
         }
-      }
 
-      return `<tr>
+        return `<tr>
         <td><span class="badge">${timeStr}</span></td>
         <td><strong>${escapeHtml(e.person_name)}</strong></td>
         <td>${imageCell}</td>
@@ -53,7 +54,8 @@ export function renderEventsLog(
         <td><code>${escapeHtml(e.event_id)}</code></td>
         <td>${escapeHtml(e.alarm_name)}</td>
       </tr>`;
-    }).join("");
+      })
+      .join("");
   }
 
   const personQuery = selectedPerson ? `&person=${encodeURIComponent(selectedPerson)}` : "";

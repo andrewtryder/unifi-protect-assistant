@@ -19,16 +19,26 @@ export function getConfigWarnings(env: Env): string[] {
     warnings.push("GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET missing — Google sign-in will fail.");
   }
 
+  if (!env.BETTER_AUTH_URL?.trim()) {
+    warnings.push("BETTER_AUTH_URL missing — auth base URL cannot be resolved.");
+  }
+
   if (!env.BETTER_AUTH_SECRET?.trim()) {
-    warnings.push("BETTER_AUTH_SECRET missing — session signing is insecure or will fail in production.");
+    warnings.push(
+      "BETTER_AUTH_SECRET missing — session signing is insecure or will fail in production."
+    );
   }
 
   if (!env.BETTER_AUTH_API_KEY?.trim()) {
-    warnings.push("BETTER_AUTH_API_KEY missing — Better Auth Infrastructure (dash) will not connect.");
+    warnings.push(
+      "BETTER_AUTH_API_KEY missing — Better Auth Infrastructure (dash) will not connect."
+    );
   }
 
   if (!env.HONEYBADGER_API_KEY?.trim()) {
-    warnings.push("HONEYBADGER_API_KEY missing — server errors will not be reported to Honeybadger.");
+    warnings.push(
+      "HONEYBADGER_API_KEY missing — server errors will not be reported to Honeybadger."
+    );
   }
 
   for (const [label, raw] of [

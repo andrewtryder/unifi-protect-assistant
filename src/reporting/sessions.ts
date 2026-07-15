@@ -39,9 +39,7 @@ function parseGapMap(raw?: string): Map<string, number> {
 export function createGapResolver(env: Env): GapResolver {
   const defaultMinutes = Number(env.PRESENCE_GAP_MINUTES);
   const defaultMs =
-    (Number.isFinite(defaultMinutes) && defaultMinutes > 0
-      ? defaultMinutes
-      : DEFAULT_GAP_MINUTES) *
+    (Number.isFinite(defaultMinutes) && defaultMinutes > 0 ? defaultMinutes : DEFAULT_GAP_MINUTES) *
     60 *
     1000;
 
@@ -78,10 +76,7 @@ export interface SessionDraft {
  * Pure sessionization: sort events, split when gap exceeded.
  * Camera override applies when both consecutive events share the same camera_id.
  */
-export function sessionizeEvents(
-  events: FaceEvent[],
-  gapResolver: GapResolver
-): SessionDraft[] {
+export function sessionizeEvents(events: FaceEvent[], gapResolver: GapResolver): SessionDraft[] {
   if (events.length === 0) return [];
 
   const byPerson = new Map<string, FaceEvent[]>();
@@ -191,10 +186,7 @@ export function draftsToPresenceSessions(
 }
 
 function isUnknownFace(event: FaceEvent): boolean {
-  return (
-    event.trigger_key === "face_unknown" ||
-    event.person_name.toLowerCase() === "unknown"
-  );
+  return event.trigger_key === "face_unknown" || event.person_name.toLowerCase() === "unknown";
 }
 
 /**
@@ -214,10 +206,8 @@ export async function buildTodaySnapshot(
   const byPerson = new Map<string, TodayPersonRow>();
   for (const session of sessions) {
     const existing = byPerson.get(session.person_key);
-    const observedSeconds =
-      (existing?.observed_span_seconds || 0) + session.duration_seconds;
-    const sightingCount =
-      (existing?.sighting_count || 0) + session.sighting_count;
+    const observedSeconds = (existing?.observed_span_seconds || 0) + session.duration_seconds;
+    const sightingCount = (existing?.sighting_count || 0) + session.sighting_count;
     const sessionCount = (existing?.session_count || 0) + 1;
     const firstSeen = existing
       ? Math.min(existing.first_seen_ms, session.started_at_ms)
@@ -231,12 +221,9 @@ export async function buildTodaySnapshot(
         : existing.last_camera_id;
 
     const gapMs = gapResolver(session.person_key, lastCamera);
-    const status: "present" | "away" =
-      nowMs - lastSeen <= gapMs ? "present" : "away";
+    const status: "present" | "away" = nowMs - lastSeen <= gapMs ? "present" : "away";
 
-    const { roundedMinutes, roundedHours } = roundToNearest15Mins(
-      observedSeconds * 1000
-    );
+    const { roundedMinutes, roundedHours } = roundToNearest15Mins(observedSeconds * 1000);
 
     byPerson.set(session.person_key, {
       person_key: session.person_key,
@@ -264,8 +251,7 @@ export async function buildTodaySnapshot(
 
   const webhook = await getWebhookHealth(env, hourAgo);
   const healthy =
-    webhook.last_received_at_ms != null &&
-    nowMs - webhook.last_received_at_ms <= WEBHOOK_STALE_MS;
+    webhook.last_received_at_ms != null && nowMs - webhook.last_received_at_ms <= WEBHOOK_STALE_MS;
 
   const recentEvents: TodayStreamEvent[] = [...events]
     .sort((a, b) => b.seen_at_ms - a.seen_at_ms)

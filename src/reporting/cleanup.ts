@@ -17,25 +17,33 @@ export async function runRetentionCleanup(env: Env): Promise<{
   const oneMonthAgoMs = now - 30 * 24 * 60 * 60 * 1000;
   const twelveMonthsAgoMs = now - 365 * 24 * 60 * 60 * 1000;
 
-  const deleteNotificationsStmt = env.DB.prepare(`
+  const deleteNotificationsStmt = env.DB.prepare(
+    `
     DELETE FROM webhook_notifications
     WHERE received_at_ms < ?
-  `).bind(oneMonthAgoMs);
+  `
+  ).bind(oneMonthAgoMs);
 
-  const deleteEventsStmt = env.DB.prepare(`
+  const deleteEventsStmt = env.DB.prepare(
+    `
     DELETE FROM face_events
     WHERE seen_at_ms < ?
-  `).bind(twelveMonthsAgoMs);
+  `
+  ).bind(twelveMonthsAgoMs);
 
-  const deleteReportsStmt = env.DB.prepare(`
+  const deleteReportsStmt = env.DB.prepare(
+    `
     DELETE FROM daily_person_reports
     WHERE first_seen_ms < ?
-  `).bind(twelveMonthsAgoMs);
+  `
+  ).bind(twelveMonthsAgoMs);
 
-  const deleteSessionsStmt = env.DB.prepare(`
+  const deleteSessionsStmt = env.DB.prepare(
+    `
     DELETE FROM presence_sessions
     WHERE started_at_ms < ?
-  `).bind(twelveMonthsAgoMs);
+  `
+  ).bind(twelveMonthsAgoMs);
 
   const results = await env.DB.batch([
     deleteNotificationsStmt,

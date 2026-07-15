@@ -25,21 +25,33 @@ export async function ingestWebhook(
   imageBase64?: string,
   vehicleEvents: VehicleEvent[] = []
 ): Promise<IngestResult> {
-  const insertNotificationStmt = env.DB.prepare(`
+  const insertNotificationStmt = env.DB.prepare(
+    `
     INSERT INTO webhook_notifications (id, received_at_ms, source_ip, event_id, alarm_name, payload_json, image_base64)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).bind(notificationId, receivedAtMs, sourceIp, eventId, alarmName, rawPayload, imageBase64 || null);
+  `
+  ).bind(
+    notificationId,
+    receivedAtMs,
+    sourceIp,
+    eventId,
+    alarmName,
+    rawPayload,
+    imageBase64 || null
+  );
 
   const statements = [insertNotificationStmt];
 
   for (const event of faceEvents) {
-    const insertEventStmt = env.DB.prepare(`
+    const insertEventStmt = env.DB.prepare(
+      `
       INSERT OR IGNORE INTO face_events (
         id, notification_id, event_id, seen_at_ms, local_date,
         person_key, person_name, person_id, trigger_key, camera_id,
         alarm_name, raw_trigger_json, image_base64
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
+    `
+    ).bind(
       event.id,
       event.notification_id,
       event.event_id,
@@ -58,13 +70,15 @@ export async function ingestWebhook(
   }
 
   for (const event of vehicleEvents) {
-    const insertVehicleStmt = env.DB.prepare(`
+    const insertVehicleStmt = env.DB.prepare(
+      `
       INSERT OR IGNORE INTO vehicle_events (
         id, notification_id, event_id, seen_at_ms, local_date,
         plate_key, plate_text, trigger_key, camera_id,
         alarm_name, raw_trigger_json, image_base64
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
+    `
+    ).bind(
       event.id,
       event.notification_id,
       event.event_id,

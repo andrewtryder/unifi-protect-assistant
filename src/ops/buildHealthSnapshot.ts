@@ -20,8 +20,7 @@ export async function buildHealthSnapshot(
   ]);
 
   const webhook_healthy =
-    facts.last_webhook_at_ms != null &&
-    nowMs - facts.last_webhook_at_ms <= WEBHOOK_STALE_MS;
+    facts.last_webhook_at_ms != null && nowMs - facts.last_webhook_at_ms <= WEBHOOK_STALE_MS;
 
   return {
     generated_at_ms: nowMs,

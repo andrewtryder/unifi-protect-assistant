@@ -30,10 +30,11 @@ export function renderPeopleFilter(
 ): string {
   const options = [
     `<option value=""${!selectedPerson ? " selected" : ""}>All People</option>`,
-    ...people.map(p => {
-      const selected = selectedPerson && p.person_name.toLowerCase() === selectedPerson.toLowerCase()
-        ? " selected"
-        : "";
+    ...people.map((p) => {
+      const selected =
+        selectedPerson && p.person_name.toLowerCase() === selectedPerson.toLowerCase()
+          ? " selected"
+          : "";
       const label = `${escapeHtml(p.person_name)} (${p.event_count})`;
       return `<option value="${escapeHtml(p.person_name)}"${selected}>${label}</option>`;
     }),

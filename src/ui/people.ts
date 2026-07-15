@@ -91,9 +91,7 @@ function renderHeatmap(heatmap: PersonHeatmapDay[], personName: string): string 
   const months: string[] = [];
   const cursor = new Date(start);
   while (cursor <= end) {
-    months.push(
-      `${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(2, "0")}`
-    );
+    months.push(`${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(2, "0")}`);
     cursor.setUTCMonth(cursor.getUTCMonth() + 1);
   }
 
@@ -113,9 +111,7 @@ function renderHeatmap(heatmap: PersonHeatmapDay[], personName: string): string 
           ? entry.observed_rounded_hours || entry.observed_span_seconds / 3600
           : 0;
         const intensity = entry ? Math.min(1, hours / maxHours) : 0;
-        const title = entry
-          ? `${dateStr}: ${hours.toFixed(2)}h observed`
-          : `${dateStr}: no visits`;
+        const title = entry ? `${dateStr}: ${hours.toFixed(2)}h observed` : `${dateStr}: no visits`;
         const href = `/events?date=${encodeURIComponent(dateStr)}&person=${encodeURIComponent(personName)}`;
         cells.push(
           `<a class="heat-cell" href="${href}" title="${escapeHtml(title)}" style="--heat:${intensity.toFixed(3)}"></a>`

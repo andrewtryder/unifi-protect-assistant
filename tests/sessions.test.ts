@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
-import {
-  createGapResolver,
-  sessionizeEvents,
-} from "../src/reporting/sessions.js";
+import { createGapResolver, sessionizeEvents } from "../src/reporting/sessions.js";
 import { roundToNearest15Mins } from "../src/reporting/round.js";
 import { Env, FaceEvent } from "../src/types.js";
 
-function event(partial: Partial<FaceEvent> & Pick<FaceEvent, "event_id" | "seen_at_ms" | "person_key" | "person_name">): FaceEvent {
+function event(
+  partial: Partial<FaceEvent> &
+    Pick<FaceEvent, "event_id" | "seen_at_ms" | "person_key" | "person_name">
+): FaceEvent {
   return {
     id: partial.id || partial.event_id,
     notification_id: partial.notification_id || "n1",
@@ -46,8 +46,20 @@ describe("sessionizeEvents", () => {
     const t0 = Date.parse("2025-07-14T13:00:00Z");
     const sessions = sessionizeEvents(
       [
-        event({ event_id: "e1", seen_at_ms: t0, person_key: "id:a", person_name: "Alice", camera_id: "cam-1" }),
-        event({ event_id: "e2", seen_at_ms: t0 + 10 * 60 * 1000, person_key: "id:a", person_name: "Alice", camera_id: "cam-2" }),
+        event({
+          event_id: "e1",
+          seen_at_ms: t0,
+          person_key: "id:a",
+          person_name: "Alice",
+          camera_id: "cam-1",
+        }),
+        event({
+          event_id: "e2",
+          seen_at_ms: t0 + 10 * 60 * 1000,
+          person_key: "id:a",
+          person_name: "Alice",
+          camera_id: "cam-2",
+        }),
       ],
       gap20m
     );
@@ -71,10 +83,7 @@ describe("sessionizeEvents", () => {
     expect(sessions).toHaveLength(2);
     expect(sessions[0].started_at_ms).toBe(morning);
     expect(sessions[1].started_at_ms).toBe(evening);
-    const observedMs = sessions.reduce(
-      (sum, s) => sum + (s.ended_at_ms - s.started_at_ms),
-      0
-    );
+    const observedMs = sessions.reduce((sum, s) => sum + (s.ended_at_ms - s.started_at_ms), 0);
     expect(observedMs).toBe(0);
   });
 
@@ -84,7 +93,12 @@ describe("sessionizeEvents", () => {
       [
         event({ event_id: "a1", seen_at_ms: t0, person_key: "id:a", person_name: "Alice" }),
         event({ event_id: "b1", seen_at_ms: t0 + 1000, person_key: "id:b", person_name: "Bob" }),
-        event({ event_id: "a2", seen_at_ms: t0 + 5 * 60 * 1000, person_key: "id:a", person_name: "Alice" }),
+        event({
+          event_id: "a2",
+          seen_at_ms: t0 + 5 * 60 * 1000,
+          person_key: "id:a",
+          person_name: "Alice",
+        }),
       ],
       gap20m
     );

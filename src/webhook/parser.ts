@@ -17,9 +17,9 @@ export function getLocalDate(timestampMs: number, timezone: string): string {
     day: "2-digit",
   });
   const parts = formatter.formatToParts(new Date(timestampMs));
-  const year = parts.find(p => p.type === "year")?.value;
-  const month = parts.find(p => p.type === "month")?.value;
-  const day = parts.find(p => p.type === "day")?.value;
+  const year = parts.find((p) => p.type === "year")?.value;
+  const month = parts.find((p) => p.type === "month")?.value;
+  const day = parts.find((p) => p.type === "day")?.value;
   return `${year}-${month}-${day}`;
 }
 
@@ -65,13 +65,19 @@ export function parseWebhookPayload(
   const conditions = Array.isArray(alarm.conditions) ? alarm.conditions : [];
 
   const targetNames = env.TARGET_PERSON_NAMES
-    ? env.TARGET_PERSON_NAMES.split(",").map(n => n.trim().toLowerCase()).filter(Boolean)
+    ? env.TARGET_PERSON_NAMES.split(",")
+        .map((n) => n.trim().toLowerCase())
+        .filter(Boolean)
     : [];
   const targetIds = env.TARGET_PERSON_IDS
-    ? env.TARGET_PERSON_IDS.split(",").map(i => i.trim().toLowerCase()).filter(Boolean)
+    ? env.TARGET_PERSON_IDS.split(",")
+        .map((i) => i.trim().toLowerCase())
+        .filter(Boolean)
     : [];
   const watchCameras = env.WATCH_CAMERA_IDS
-    ? env.WATCH_CAMERA_IDS.split(",").map(c => c.trim().toLowerCase()).filter(Boolean)
+    ? env.WATCH_CAMERA_IDS.split(",")
+        .map((c) => c.trim().toLowerCase())
+        .filter(Boolean)
     : [];
 
   for (const trigger of triggers) {

@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Block push if typecheck, lint, format, or tests fail (same gate as CI).
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+npm run check

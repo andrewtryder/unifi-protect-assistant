@@ -13,7 +13,7 @@ export function renderCalendar(
   selectedPerson?: string
 ): string {
   const [year, month] = monthStr.split("-").map(Number);
-  
+
   // Calculate calendar dates
   const firstDayIndex = new Date(year, month - 1, 1).getDay(); // 0 = Sun
   const totalDays = new Date(year, month, 0).getDate();
@@ -40,8 +40,8 @@ export function renderCalendar(
   }
 
   // Create calendar body
-  let cells: string[] = [];
-  
+  const cells: string[] = [];
+
   // Empty slots for previous month padding
   for (let i = 0; i < firstDayIndex; i++) {
     cells.push(`<div class="day empty"></div>`);
@@ -52,30 +52,44 @@ export function renderCalendar(
     const dayReports = reportsByDay.get(day) || [];
     const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     const dayLink = `/events?date=${dateStr}${personQuery}`;
-    
+
     let reportsHtml = "";
     if (dayReports.length > 0) {
-      reportsHtml = dayReports.map(r => {
-        const firstTime = new Date(r.first_seen_ms).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hour12: false });
-        const lastTime = new Date(r.last_seen_ms).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hour12: false });
-        const observedHours = r.observed_rounded_hours ?? r.rounded_span_hours;
-        const sessions = r.session_count != null ? `, ${r.session_count} session${r.session_count === 1 ? "" : "s"}` : "";
-        const wallHint = r.observed_rounded_hours != null
-          ? `; wall ${r.rounded_span_hours}h first–last`
-          : "";
-        const name = escapeHtml(r.person_name);
-        const tooltip = escapeHtml(
-          `${r.person_name}: ${firstTime}–${lastTime}, observed ${observedHours}h${sessions}${wallHint}`
-        );
-        return `<div class="person-tag" title="${tooltip}">
+      reportsHtml = dayReports
+        .map((r) => {
+          const firstTime = new Date(r.first_seen_ms).toLocaleTimeString("en-US", {
+            timeZone: "America/New_York",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          });
+          const lastTime = new Date(r.last_seen_ms).toLocaleTimeString("en-US", {
+            timeZone: "America/New_York",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          });
+          const observedHours = r.observed_rounded_hours ?? r.rounded_span_hours;
+          const sessions =
+            r.session_count != null
+              ? `, ${r.session_count} session${r.session_count === 1 ? "" : "s"}`
+              : "";
+          const wallHint =
+            r.observed_rounded_hours != null ? `; wall ${r.rounded_span_hours}h first–last` : "";
+          const name = escapeHtml(r.person_name);
+          const tooltip = escapeHtml(
+            `${r.person_name}: ${firstTime}–${lastTime}, observed ${observedHours}h${sessions}${wallHint}`
+          );
+          return `<div class="person-tag" title="${tooltip}">
           <span class="dot"></span>${name} <strong>${observedHours}h</strong>
         </div>`;
-      }).join("");
+        })
+        .join("");
     }
 
     cells.push(`
       <a href="${dayLink}" class="day-cell-link">
-        <div class="day-cell ${dayReports.length > 0 ? 'active-day' : ''}">
+        <div class="day-cell ${dayReports.length > 0 ? "active-day" : ""}">
           <span class="day-number">${day}</span>
           <div class="day-content">${reportsHtml}</div>
         </div>

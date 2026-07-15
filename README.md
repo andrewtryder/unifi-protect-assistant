@@ -106,7 +106,9 @@ id = "YOUR_KV_NAMESPACE_ID"
 ```
 
 ### 2. Local Environment Variables
+
 Create a `.dev.vars` file in the root directory:
+
 ```env
 WEBHOOK_SECRET=your_dev_shared_webhook_secret
 # App signing secret (≥32 chars). Separate from the Infrastructure API key.
@@ -122,18 +124,24 @@ BETTER_AUTH_URL=http://localhost:8787
 ```
 
 ### 3. Google OAuth redirect URIs
+
 In [Google Cloud Console](https://console.cloud.google.com/apis/credentials) → your OAuth 2.0 Client, add Authorized redirect URIs:
+
 - Production: `https://unifi-protect-assistant.mrcoffee.workers.dev/api/auth/callback/google`
 - Local: `http://localhost:8787/api/auth/callback/google`
 
 ### 4. Local Migration Application
+
 Apply the database migrations to your local development environment:
+
 ```bash
 npm run db:migrate:local
 ```
 
 ### 5. Running the Dev Server
+
 Launch wrangler's local development server:
+
 ```bash
 npm run dev
 ```
@@ -172,7 +180,9 @@ Reject/duplicate counters start at zero after deploy and accumulate in KV per lo
 ## Deployment & Production Setup
 
 ### Secrets configuration
+
 Set secrets on the live worker (do not commit these values):
+
 ```bash
 npx wrangler secret put WEBHOOK_SECRET
 npx wrangler secret put BETTER_AUTH_SECRET
@@ -191,12 +201,15 @@ Set `HONEYBADGER_API_KEY` from your [Honeybadger](https://www.honeybadger.io/) p
 `BETTER_AUTH_URL` defaults to `https://unifi-protect-assistant.mrcoffee.workers.dev` via `[vars]` in `wrangler.toml`.
 
 ### Production Migrations
+
 Apply the migrations to the live Cloudflare production D1 instance:
+
 ```bash
 npm run db:migrate:prod
 ```
 
 ### Manual Deploy
+
 ```bash
 npm run deploy
 ```
@@ -205,20 +218,20 @@ npm run deploy
 
 ## GitHub Actions Deployment (CI/CD)
 
-This repository includes a GitHub Action to automatically deploy on push to the `main` branch. 
+This repository includes a GitHub Action to automatically deploy on push to the `main` branch.
 
 Add the following secrets to your GitHub Repository Settings (`Settings -> Secrets and variables -> Actions`). On every deploy to `main`, the workflow uploads the app secrets to the Cloudflare Worker (in addition to deploying `[vars]` from `wrangler.toml`):
 
-| GitHub secret | Purpose |
-| --- | --- |
-| `CLOUDFLARE_API_TOKEN` | Cloudflare API token (Workers, D1, KV) |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID |
-| `BETTER_AUTH_SECRET` | App signing secret (≥32 chars) |
-| `BETTER_AUTH_API_KEY` | Better Auth Infrastructure API key (`ba_…`) |
-| `GOOGLE_CLIENT_ID` | Google OAuth client ID |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
-| `ALLOWED_EMAILS` | Comma-separated allowlisted Google emails |
-| `HONEYBADGER_API_KEY` | Honeybadger project API key (error reporting) |
+| GitHub secret           | Purpose                                       |
+| ----------------------- | --------------------------------------------- |
+| `CLOUDFLARE_API_TOKEN`  | Cloudflare API token (Workers, D1, KV)        |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID                         |
+| `BETTER_AUTH_SECRET`    | App signing secret (≥32 chars)                |
+| `BETTER_AUTH_API_KEY`   | Better Auth Infrastructure API key (`ba_…`)   |
+| `GOOGLE_CLIENT_ID`      | Google OAuth client ID                        |
+| `GOOGLE_CLIENT_SECRET`  | Google OAuth client secret                    |
+| `ALLOWED_EMAILS`        | Comma-separated allowlisted Google emails     |
+| `HONEYBADGER_API_KEY`   | Honeybadger project API key (error reporting) |
 
 Optional: `WEBHOOK_SECRET` — set with `npx wrangler secret put WEBHOOK_SECRET` if you protect `POST /unifi` (not synced by CI unless you add it to the workflow and GitHub secrets).
 
@@ -229,6 +242,7 @@ You can also re-run **Deploy Worker** via `workflow_dispatch` to refresh Cloudfl
 ## UniFi Protect Webhook Configuration
 
 In the UniFi Protect controller interface under the **Alarm Manager**:
+
 1. Create a new alarm triggering on person/face detections.
 2. Select **Webhook** as the notification type.
 3. Method: `POST`

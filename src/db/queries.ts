@@ -76,18 +76,17 @@ export async function getDistinctPeopleForMonth(
 /**
  * Returns distinct local_date values that have face_events in a YYYY-MM month.
  */
-export async function getDistinctDatesForMonth(
-  env: Env,
-  monthStr: string
-): Promise<string[]> {
+export async function getDistinctDatesForMonth(env: Env, monthStr: string): Promise<string[]> {
   const query = `
     SELECT DISTINCT local_date
     FROM face_events
     WHERE local_date LIKE ?
     ORDER BY local_date ASC
   `;
-  const { results } = await env.DB.prepare(query).bind(`${monthStr}%`).all<{ local_date: string }>();
-  return (results || []).map(r => r.local_date);
+  const { results } = await env.DB.prepare(query)
+    .bind(`${monthStr}%`)
+    .all<{ local_date: string }>();
+  return (results || []).map((r) => r.local_date);
 }
 
 /**
@@ -112,7 +111,9 @@ export async function getReportsForMonth(
 
   query += ` ORDER BY local_date ASC, person_name ASC`;
 
-  const { results } = await env.DB.prepare(query).bind(...bindings).all<DailyReport>();
+  const { results } = await env.DB.prepare(query)
+    .bind(...bindings)
+    .all<DailyReport>();
   return results || [];
 }
 
@@ -141,17 +142,16 @@ export async function getEventsForDate(
 
   query += ` ORDER BY seen_at_ms ASC`;
 
-  const { results } = await env.DB.prepare(query).bind(...bindings).all<FaceEvent>();
+  const { results } = await env.DB.prepare(query)
+    .bind(...bindings)
+    .all<FaceEvent>();
   return results || [];
 }
 
 /**
  * Face events with seen_at_ms >= sinceMs.
  */
-export async function getEventsSince(
-  env: Env,
-  sinceMs: number
-): Promise<FaceEvent[]> {
+export async function getEventsSince(env: Env, sinceMs: number): Promise<FaceEvent[]> {
   const query = `
     SELECT id, notification_id, event_id, seen_at_ms, local_date,
            person_key, person_name, person_id, trigger_key, camera_id, alarm_name,
@@ -171,16 +171,22 @@ export async function getWebhookHealth(
   env: Env,
   sinceMs: number
 ): Promise<{ last_received_at_ms: number | null; count_last_hour: number }> {
-  const lastRow = await env.DB.prepare(`
+  const lastRow = await env.DB.prepare(
+    `
     SELECT MAX(received_at_ms) AS last_received_at_ms
     FROM webhook_notifications
-  `).first<{ last_received_at_ms: number | null }>();
+  `
+  ).first<{ last_received_at_ms: number | null }>();
 
-  const countRow = await env.DB.prepare(`
+  const countRow = await env.DB.prepare(
+    `
     SELECT COUNT(*) AS cnt
     FROM webhook_notifications
     WHERE received_at_ms >= ?
-  `).bind(sinceMs).first<{ cnt: number }>();
+  `
+  )
+    .bind(sinceMs)
+    .first<{ cnt: number }>();
 
   return {
     last_received_at_ms: lastRow?.last_received_at_ms ?? null,
@@ -209,7 +215,9 @@ export async function getSessionsForDate(
 
   query += ` ORDER BY started_at_ms ASC`;
 
-  const { results } = await env.DB.prepare(query).bind(...bindings).all<PresenceSession>();
+  const { results } = await env.DB.prepare(query)
+    .bind(...bindings)
+    .all<PresenceSession>();
   return results || [];
 }
 
@@ -221,21 +229,21 @@ export async function replaceSessionsForDate(
   localDate: string,
   sessions: PresenceSession[]
 ): Promise<void> {
-  await env.DB.prepare(`DELETE FROM presence_sessions WHERE local_date = ?`)
-    .bind(localDate)
-    .run();
+  await env.DB.prepare(`DELETE FROM presence_sessions WHERE local_date = ?`).bind(localDate).run();
 
   if (sessions.length === 0) return;
 
   const stmts = sessions.map((s) =>
-    env.DB.prepare(`
+    env.DB.prepare(
+      `
       INSERT INTO presence_sessions (
         id, local_date, person_key, person_name,
         started_at_ms, ended_at_ms, duration_seconds, rounded_duration_minutes,
         sighting_count, first_event_id, last_event_id,
         first_camera_id, last_camera_id, is_open, generated_at_ms
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
+    `
+    ).bind(
       s.id,
       s.local_date,
       s.person_key,
@@ -271,26 +279,28 @@ export async function upsertDailyReport(env: Env, report: DailyReport): Promise<
       session_count
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
-  await env.DB.prepare(query).bind(
-    report.local_date,
-    report.person_key,
-    report.person_name,
-    report.first_seen_ms,
-    report.last_seen_ms,
-    report.raw_span_seconds,
-    report.rounded_span_minutes,
-    report.rounded_span_hours,
-    report.first_event_id,
-    report.last_event_id,
-    report.first_camera_id,
-    report.last_camera_id,
-    report.seen_count,
-    report.generated_at_ms,
-    report.observed_span_seconds ?? null,
-    report.observed_rounded_minutes ?? null,
-    report.observed_rounded_hours ?? null,
-    report.session_count ?? null
-  ).run();
+  await env.DB.prepare(query)
+    .bind(
+      report.local_date,
+      report.person_key,
+      report.person_name,
+      report.first_seen_ms,
+      report.last_seen_ms,
+      report.raw_span_seconds,
+      report.rounded_span_minutes,
+      report.rounded_span_hours,
+      report.first_event_id,
+      report.last_event_id,
+      report.first_camera_id,
+      report.last_camera_id,
+      report.seen_count,
+      report.generated_at_ms,
+      report.observed_span_seconds ?? null,
+      report.observed_rounded_minutes ?? null,
+      report.observed_rounded_hours ?? null,
+      report.session_count ?? null
+    )
+    .run();
 }
 
 /**
@@ -315,12 +325,10 @@ export async function getPeopleDirectory(env: Env): Promise<PersonDirectoryEntry
 /**
  * Full person profile for a stable person_key, or null if unknown.
  */
-export async function getPersonProfile(
-  env: Env,
-  personKey: string
-): Promise<PersonProfile | null> {
+export async function getPersonProfile(env: Env, personKey: string): Promise<PersonProfile | null> {
   const timezone = env.TIMEZONE || "America/New_York";
-  const identity = await env.DB.prepare(`
+  const identity = await env.DB.prepare(
+    `
     SELECT person_key,
            MAX(person_name) AS person_name,
            MAX(person_id) AS person_id,
@@ -330,14 +338,17 @@ export async function getPersonProfile(
     FROM face_events
     WHERE person_key = ?
     GROUP BY person_key
-  `).bind(personKey).first<{
-    person_key: string;
-    person_name: string;
-    person_id: string;
-    first_seen_ms: number;
-    last_seen_ms: number;
-    event_count: number;
-  }>();
+  `
+  )
+    .bind(personKey)
+    .first<{
+      person_key: string;
+      person_name: string;
+      person_id: string;
+      first_seen_ms: number;
+      last_seen_ms: number;
+      event_count: number;
+    }>();
 
   if (!identity) return null;
 
@@ -345,63 +356,76 @@ export async function getPersonProfile(
   const since90 = localDateDaysAgo(today, 90);
   const since365 = localDateDaysAgo(today, 365);
 
-  const sessionTotals = await env.DB.prepare(`
+  const sessionTotals = await env.DB.prepare(
+    `
     SELECT COUNT(*) AS visit_count,
            COALESCE(SUM(duration_seconds), 0) AS observed_span_seconds
     FROM presence_sessions
     WHERE person_key = ?
-  `).bind(personKey).first<{ visit_count: number; observed_span_seconds: number }>();
+  `
+  )
+    .bind(personKey)
+    .first<{ visit_count: number; observed_span_seconds: number }>();
 
   const visit_count = sessionTotals?.visit_count ?? 0;
   const observed_span_seconds = sessionTotals?.observed_span_seconds ?? 0;
   const { roundedHours } = roundToNearest15Mins(observed_span_seconds * 1000);
 
   // Per-day first session start / last session end for typical times (90d)
-  const sessionDays = await env.DB.prepare(`
+  const sessionDays = await env.DB.prepare(
+    `
     SELECT local_date,
            MIN(started_at_ms) AS started_at_ms,
            MAX(ended_at_ms) AS ended_at_ms
     FROM presence_sessions
     WHERE person_key = ? AND local_date >= ?
     GROUP BY local_date
-  `).bind(personKey, since90).all<{
-    local_date: string;
-    started_at_ms: number;
-    ended_at_ms: number;
-  }>();
-
-  let dayWindows = sessionDays.results || [];
-
-  if (dayWindows.length === 0) {
-    const reportDays = await env.DB.prepare(`
-      SELECT local_date, first_seen_ms AS started_at_ms, last_seen_ms AS ended_at_ms
-      FROM daily_person_reports
-      WHERE person_key = ? AND local_date >= ?
-    `).bind(personKey, since90).all<{
+  `
+  )
+    .bind(personKey, since90)
+    .all<{
       local_date: string;
       started_at_ms: number;
       ended_at_ms: number;
     }>();
+
+  let dayWindows = sessionDays.results || [];
+
+  if (dayWindows.length === 0) {
+    const reportDays = await env.DB.prepare(
+      `
+      SELECT local_date, first_seen_ms AS started_at_ms, last_seen_ms AS ended_at_ms
+      FROM daily_person_reports
+      WHERE person_key = ? AND local_date >= ?
+    `
+    )
+      .bind(personKey, since90)
+      .all<{
+        local_date: string;
+        started_at_ms: number;
+        ended_at_ms: number;
+      }>();
     dayWindows = reportDays.results || [];
   }
 
-  const { arrivalMinutes, departureMinutes } = typicalArrivalDeparture(
-    dayWindows,
-    timezone
-  );
+  const { arrivalMinutes, departureMinutes } = typicalArrivalDeparture(dayWindows, timezone);
 
-  const camerasResult = await env.DB.prepare(`
+  const camerasResult = await env.DB.prepare(
+    `
     SELECT camera_id, COUNT(*) AS event_count
     FROM face_events
     WHERE person_key = ?
     GROUP BY camera_id
     ORDER BY event_count DESC
     LIMIT 10
-  `).bind(personKey).all<PersonCameraStat>();
+  `
+  )
+    .bind(personKey)
+    .all<PersonCameraStat>();
 
   // Heatmap: prefer daily reports observed span; else sum sessions
-  let heatmap: PersonHeatmapDay[] = [];
-  const reportHeat = await env.DB.prepare(`
+  const reportHeat = await env.DB.prepare(
+    `
     SELECT local_date,
            COALESCE(observed_span_seconds, raw_span_seconds, 0) AS observed_span_seconds,
            COALESCE(observed_rounded_hours, rounded_span_hours, 0) AS observed_rounded_hours,
@@ -409,12 +433,16 @@ export async function getPersonProfile(
     FROM daily_person_reports
     WHERE person_key = ? AND local_date >= ?
     ORDER BY local_date ASC
-  `).bind(personKey, since365).all<PersonHeatmapDay>();
+  `
+  )
+    .bind(personKey, since365)
+    .all<PersonHeatmapDay>();
 
-  heatmap = reportHeat.results || [];
+  let heatmap: PersonHeatmapDay[] = reportHeat.results || [];
 
   if (heatmap.length === 0) {
-    const sessionHeat = await env.DB.prepare(`
+    const sessionHeat = await env.DB.prepare(
+      `
       SELECT local_date,
              SUM(duration_seconds) AS observed_span_seconds,
              COUNT(*) AS session_count
@@ -422,11 +450,14 @@ export async function getPersonProfile(
       WHERE person_key = ? AND local_date >= ?
       GROUP BY local_date
       ORDER BY local_date ASC
-    `).bind(personKey, since365).all<{
-      local_date: string;
-      observed_span_seconds: number;
-      session_count: number;
-    }>();
+    `
+    )
+      .bind(personKey, since365)
+      .all<{
+        local_date: string;
+        observed_span_seconds: number;
+        session_count: number;
+      }>();
     heatmap = (sessionHeat.results || []).map((row) => {
       const { roundedHours: h } = roundToNearest15Mins(row.observed_span_seconds * 1000);
       return {
@@ -438,7 +469,8 @@ export async function getPersonProfile(
     });
   }
 
-  const recent = await env.DB.prepare(`
+  const recent = await env.DB.prepare(
+    `
     SELECT id, notification_id, event_id, seen_at_ms, local_date,
            person_key, person_name, person_id, trigger_key, camera_id, alarm_name,
            image_base64
@@ -446,7 +478,10 @@ export async function getPersonProfile(
     WHERE person_key = ?
     ORDER BY seen_at_ms DESC
     LIMIT 24
-  `).bind(personKey).all<FaceEvent>();
+  `
+  )
+    .bind(personKey)
+    .all<FaceEvent>();
 
   return {
     person_key: identity.person_key,
@@ -471,7 +506,10 @@ export async function getPersonProfile(
 /**
  * Traffic + row-count facts for the health/diagnostics page.
  */
-export async function getHealthDbFacts(env: Env, nowMs: number = Date.now()): Promise<{
+export async function getHealthDbFacts(
+  env: Env,
+  nowMs: number = Date.now()
+): Promise<{
   last_webhook_at_ms: number | null;
   last_event_at_ms: number | null;
   events_last_hour: number;
@@ -502,12 +540,22 @@ export async function getHealthDbFacts(env: Env, nowMs: number = Date.now()): Pr
     countReports,
     countSessions,
   ] = await Promise.all([
-    env.DB.prepare(`SELECT MAX(received_at_ms) AS v FROM webhook_notifications`).first<{ v: number | null }>(),
+    env.DB.prepare(`SELECT MAX(received_at_ms) AS v FROM webhook_notifications`).first<{
+      v: number | null;
+    }>(),
     env.DB.prepare(`SELECT MAX(seen_at_ms) AS v FROM face_events`).first<{ v: number | null }>(),
-    env.DB.prepare(`SELECT COUNT(*) AS c FROM face_events WHERE seen_at_ms >= ?`).bind(hourAgo).first<{ c: number }>(),
-    env.DB.prepare(`SELECT COUNT(*) AS c FROM face_events WHERE seen_at_ms >= ?`).bind(dayAgo).first<{ c: number }>(),
-    env.DB.prepare(`SELECT COUNT(*) AS c FROM webhook_notifications WHERE received_at_ms >= ?`).bind(hourAgo).first<{ c: number }>(),
-    env.DB.prepare(`SELECT COUNT(*) AS c FROM webhook_notifications WHERE received_at_ms >= ?`).bind(dayAgo).first<{ c: number }>(),
+    env.DB.prepare(`SELECT COUNT(*) AS c FROM face_events WHERE seen_at_ms >= ?`)
+      .bind(hourAgo)
+      .first<{ c: number }>(),
+    env.DB.prepare(`SELECT COUNT(*) AS c FROM face_events WHERE seen_at_ms >= ?`)
+      .bind(dayAgo)
+      .first<{ c: number }>(),
+    env.DB.prepare(`SELECT COUNT(*) AS c FROM webhook_notifications WHERE received_at_ms >= ?`)
+      .bind(hourAgo)
+      .first<{ c: number }>(),
+    env.DB.prepare(`SELECT COUNT(*) AS c FROM webhook_notifications WHERE received_at_ms >= ?`)
+      .bind(dayAgo)
+      .first<{ c: number }>(),
     env.DB.prepare(`SELECT COUNT(*) AS c FROM webhook_notifications`).first<{ c: number }>(),
     env.DB.prepare(`SELECT COUNT(*) AS c FROM face_events`).first<{ c: number }>(),
     env.DB.prepare(`SELECT COUNT(*) AS c FROM vehicle_events`).first<{ c: number }>(),
