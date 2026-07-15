@@ -43,9 +43,11 @@ jobs:
             GOOGLE_CLIENT_ID
             GOOGLE_CLIENT_SECRET
             ALLOWED_EMAILS
+            HONEYBADGER_API_KEY
         env:
           BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
           BETTER_AUTH_API_KEY: ${{ secrets.BETTER_AUTH_API_KEY }}
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           ALLOWED_EMAILS: ${{ secrets.ALLOWED_EMAILS }}
+          HONEYBADGER_API_KEY: ${{ secrets.HONEYBADGER_API_KEY }}

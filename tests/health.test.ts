@@ -45,6 +45,7 @@ describe("getConfigWarnings", () => {
     });
     expect(warnings.some((w) => w.includes("BETTER_AUTH_SECRET"))).toBe(true);
     expect(warnings.some((w) => w.includes("BETTER_AUTH_API_KEY"))).toBe(true);
+    expect(warnings.some((w) => w.includes("HONEYBADGER_API_KEY"))).toBe(true);
   });
 
   it("warns on invalid presence gap JSON", () => {
@@ -56,6 +57,7 @@ describe("getConfigWarnings", () => {
       GOOGLE_CLIENT_SECRET: "secret",
       BETTER_AUTH_SECRET: "secret-secret-secret-secret-secret",
       BETTER_AUTH_API_KEY: "ba_test",
+      HONEYBADGER_API_KEY: "hb_test",
       PRESENCE_GAP_BY_PERSON: "{bad",
     });
     expect(warnings.some((w) => w.includes("PRESENCE_GAP_BY_PERSON"))).toBe(true);
@@ -70,6 +72,7 @@ describe("getConfigWarnings", () => {
       GOOGLE_CLIENT_SECRET: "secret",
       BETTER_AUTH_SECRET: "secret-secret-secret-secret-secret",
       BETTER_AUTH_API_KEY: "ba_test",
+      HONEYBADGER_API_KEY: "hb_test",
     });
     expect(warnings).toEqual([]);
   });

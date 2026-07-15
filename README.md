@@ -113,6 +113,8 @@ WEBHOOK_SECRET=your_dev_shared_webhook_secret
 BETTER_AUTH_SECRET=generate_a_long_random_secret_at_least_32_chars
 # From your Better Auth Infrastructure project (enables dash user mgmt / analytics)
 BETTER_AUTH_API_KEY=ba_...
+# Honeybadger project API key (error reporting)
+HONEYBADGER_API_KEY=your_honeybadger_api_key
 GOOGLE_CLIENT_ID=your_google_oauth_client_id
 GOOGLE_CLIENT_SECRET=your_google_oauth_client_secret
 ALLOWED_EMAILS=you@gmail.com,other@example.com
@@ -175,11 +177,14 @@ Set secrets on the live worker (do not commit these values):
 npx wrangler secret put WEBHOOK_SECRET
 npx wrangler secret put BETTER_AUTH_SECRET
 npx wrangler secret put BETTER_AUTH_API_KEY
+npx wrangler secret put HONEYBADGER_API_KEY
 npx wrangler secret put GOOGLE_CLIENT_ID
 npx wrangler secret put GOOGLE_CLIENT_SECRET
 ```
 
 Create a project in the [Better Auth Infrastructure](https://www.better-auth.com/docs/infrastructure/getting-started) dashboard, copy its API key into `BETTER_AUTH_API_KEY`, and keep `BETTER_AUTH_SECRET` as a separate random signing secret. The `dash()` plugin in this Worker uses the API key to connect hosted user management, sessions, analytics, and audit logs.
+
+Set `HONEYBADGER_API_KEY` from your [Honeybadger](https://www.honeybadger.io/) project so uncaught and caught server errors (auth, webhook ingest, cron) are reported via `@honeybadger-io/cloudflare`.
 
 `ALLOWED_EMAILS` is a Worker secret (set in GitHub Actions secrets and synced on deploy), not a `[vars]` entry.
 
@@ -213,6 +218,7 @@ Add the following secrets to your GitHub Repository Settings (`Settings -> Secre
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
 | `ALLOWED_EMAILS` | Comma-separated allowlisted Google emails |
+| `HONEYBADGER_API_KEY` | Honeybadger project API key (error reporting) |
 
 Optional: `WEBHOOK_SECRET` — set with `npx wrangler secret put WEBHOOK_SECRET` if you protect `POST /unifi` (not synced by CI unless you add it to the workflow and GitHub secrets).
 

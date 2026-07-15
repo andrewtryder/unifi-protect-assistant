@@ -33,6 +33,8 @@ import {
 } from "./ops/kvCounters.js";
 import { buildHealthSnapshot } from "./ops/buildHealthSnapshot.js";
 import { renderHealthPage } from "./ui/health.js";
+import { withHoneybadger } from "@honeybadger-io/cloudflare";
+import { reportError } from "./ops/honeybadger.js";
 
 /**
  * Keeps a selected person visible in the dropdown when day/month navigation
@@ -104,7 +106,12 @@ async function requireDashboardAuth(
   return { ok: true };
 }
 
-export default {
+export default withHoneybadger(
+  (env: Env) => ({
+    apiKey: env.HONEYBADGER_API_KEY,
+    environment: "production",
+  }),
+  {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const timezone = env.TIMEZONE || "America/New_York";
@@ -118,6 +125,7 @@ export default {
         const message = err instanceof Error ? err.message : String(err);
         const stack = err instanceof Error ? err.stack : undefined;
         console.error("[auth] handler error:", message, stack);
+        reportError(env, ctx, err, { component: "auth", path: url.pathname });
         return new Response(JSON.stringify({ error: "Internal Server Error", message }), {
           status: 500,
           headers: { "Content-Type": "application/json" },
@@ -221,6 +229,7 @@ export default {
       } catch (err: any) {
         console.error("Webhook processing error:", err);
         const message = err instanceof Error ? err.message : String(err);
+        reportError(env, ctx, err, { component: "webhook", path: "/unifi" });
         ctx.waitUntil((async () => {
           await incrementCounter(env, "d1_failures");
           await setD1Error(env, message);
@@ -440,6 +449,7 @@ export default {
         console.log(`[Cron] Daily report successfully generated for ${yesterdayStr}`);
       } catch (err) {
         console.error(`[Cron] Error generating daily report for ${yesterdayStr}:`, err);
+        reportError(env, ctx, err, { component: "cron", path: "generateDailyReport" });
         await setCronError(
           env,
           err instanceof Error ? err.message : String(err)
@@ -457,11 +467,13 @@ export default {
         console.log(`[Cron] Retention cleanup completed: purged ${cleanup.purgedNotifications} webhooks, ${cleanup.purgedEvents} events, ${cleanup.purgedReports} reports, ${cleanup.purgedSessions} sessions`);
       } catch (err) {
         console.error(`[Cron] Error running retention cleanup:`, err);
+        reportError(env, ctx, err, { component: "cron", path: "runRetentionCleanup" });
         await setCronError(
           env,
           err instanceof Error ? err.message : String(err)
         ).catch(() => undefined);
       }
     })());
+  },
   }
-};
+);

@@ -14,6 +14,8 @@ export interface Env {
   BETTER_AUTH_URL?: string;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
+  /** Honeybadger project API key for Worker error reporting */
+  HONEYBADGER_API_KEY?: string;
   /** Default gap minutes between sightings before a new presence session (default 20) */
   PRESENCE_GAP_MINUTES?: string;
   /** JSON map of person_key → gap minutes */

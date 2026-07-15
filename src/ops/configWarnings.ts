@@ -27,6 +27,10 @@ export function getConfigWarnings(env: Env): string[] {
     warnings.push("BETTER_AUTH_API_KEY missing — Better Auth Infrastructure (dash) will not connect.");
   }
 
+  if (!env.HONEYBADGER_API_KEY?.trim()) {
+    warnings.push("HONEYBADGER_API_KEY missing — server errors will not be reported to Honeybadger.");
+  }
+
   for (const [label, raw] of [
     ["PRESENCE_GAP_BY_PERSON", env.PRESENCE_GAP_BY_PERSON],
     ["PRESENCE_GAP_BY_CAMERA", env.PRESENCE_GAP_BY_CAMERA],

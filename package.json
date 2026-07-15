@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@better-auth/infra": "^0.3.6",
+    "@honeybadger-io/cloudflare": "^0.3.3",
     "better-auth": "^1.6.23"
   }
 }
