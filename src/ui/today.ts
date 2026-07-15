@@ -1,13 +1,6 @@
 import { TodaySnapshot } from "../types.js";
+import { escapeHtml } from "./html.js";
 import { renderLayout } from "./layout.js";
-
-function esc(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
 
 function formatTime(ms: number): string {
   return new Date(ms).toLocaleTimeString("en-US", {
@@ -40,11 +33,11 @@ function peopleRowsHtml(snapshot: TodaySnapshot): string {
       const statusLabel = p.status === "present" ? "Present" : "Away";
       const eventsHref = `/people/${encodeURIComponent(p.person_key)}`;
       return `<tr>
-        <td><a href="${eventsHref}" style="color:inherit;text-decoration:none;font-weight:600;">${esc(p.person_name)}</a></td>
+        <td><a href="${eventsHref}" style="color:inherit;text-decoration:none;font-weight:600;">${escapeHtml(p.person_name)}</a></td>
         <td><span class="badge ${statusClass}">${statusLabel}</span></td>
         <td>${formatTime(p.first_seen_ms)}</td>
         <td>${formatTime(p.last_seen_ms)}</td>
-        <td><code style="font-size:0.8rem;color:var(--text-muted);">${esc(p.last_camera_id)}</code></td>
+        <td><code style="font-size:0.8rem;color:var(--text-muted);">${escapeHtml(p.last_camera_id)}</code></td>
         <td>${p.observed_rounded_hours}h <span style="color:var(--text-muted);font-size:0.8rem;">(${p.session_count} sess)</span></td>
         <td>${p.sighting_count}</td>
       </tr>`;
@@ -60,9 +53,9 @@ function streamRowsHtml(snapshot: TodaySnapshot): string {
     .map(
       (e) => `<tr>
         <td>${formatTime(e.seen_at_ms)}</td>
-        <td>${esc(e.person_name)}</td>
-        <td><code style="font-size:0.8rem;color:var(--text-muted);">${esc(e.camera_id)}</code></td>
-        <td><span class="badge">${esc(e.trigger_key)}</span></td>
+        <td>${escapeHtml(e.person_name)}</td>
+        <td><code style="font-size:0.8rem;color:var(--text-muted);">${escapeHtml(e.camera_id)}</code></td>
+        <td><span class="badge">${escapeHtml(e.trigger_key)}</span></td>
       </tr>`
     )
     .join("");
@@ -146,7 +139,7 @@ export function renderTodayDashboard(snapshot: TodaySnapshot): string {
     <div class="today-header">
       <div>
         <h2>Today</h2>
-        <p class="today-meta" id="today-date">${esc(snapshot.local_date)} · America/New_York</p>
+        <p class="today-meta" id="today-date">${escapeHtml(snapshot.local_date)} · America/New_York</p>
       </div>
       <p class="today-meta"><span class="poll-dot"></span>Live · updates every 15s · <span id="updated-at">just now</span></p>
     </div>
@@ -235,12 +228,13 @@ export function renderTodayDashboard(snapshot: TodaySnapshot): string {
           if (hours < 48) return hours + 'h ago';
           return Math.floor(hours / 24) + 'd ago';
         }
-        function esc(s) {
+        function escapeHtml(s) {
           return String(s)
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
         }
         function peopleHtml(snapshot) {
           if (!snapshot.people.length) {
@@ -251,11 +245,11 @@ export function renderTodayDashboard(snapshot: TodaySnapshot): string {
             const statusLabel = p.status === 'present' ? 'Present' : 'Away';
             const href = '/people/' + encodeURIComponent(p.person_key);
             return '<tr>' +
-              '<td><a href="' + href + '" style="color:inherit;text-decoration:none;font-weight:600;">' + esc(p.person_name) + '</a></td>' +
+              '<td><a href="' + href + '" style="color:inherit;text-decoration:none;font-weight:600;">' + escapeHtml(p.person_name) + '</a></td>' +
               '<td><span class="badge ' + statusClass + '">' + statusLabel + '</span></td>' +
               '<td>' + formatTime(p.first_seen_ms) + '</td>' +
               '<td>' + formatTime(p.last_seen_ms) + '</td>' +
-              '<td><code style="font-size:0.8rem;color:var(--text-muted);">' + esc(p.last_camera_id) + '</code></td>' +
+              '<td><code style="font-size:0.8rem;color:var(--text-muted);">' + escapeHtml(p.last_camera_id) + '</code></td>' +
               '<td>' + p.observed_rounded_hours + 'h <span style="color:var(--text-muted);font-size:0.8rem;">(' + p.session_count + ' sess)</span></td>' +
               '<td>' + p.sighting_count + '</td>' +
               '</tr>';
@@ -268,9 +262,9 @@ export function renderTodayDashboard(snapshot: TodaySnapshot): string {
           return snapshot.recent_events.map(function (e) {
             return '<tr>' +
               '<td>' + formatTime(e.seen_at_ms) + '</td>' +
-              '<td>' + esc(e.person_name) + '</td>' +
-              '<td><code style="font-size:0.8rem;color:var(--text-muted);">' + esc(e.camera_id) + '</code></td>' +
-              '<td><span class="badge">' + esc(e.trigger_key) + '</span></td>' +
+              '<td>' + escapeHtml(e.person_name) + '</td>' +
+              '<td><code style="font-size:0.8rem;color:var(--text-muted);">' + escapeHtml(e.camera_id) + '</code></td>' +
+              '<td><span class="badge">' + escapeHtml(e.trigger_key) + '</span></td>' +
               '</tr>';
           }).join('');
         }

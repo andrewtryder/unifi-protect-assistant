@@ -1,3 +1,5 @@
+import { escapeHtml } from "./html.js";
+
 export function renderLoginPage(errorMessage?: string): string {
   const errorHtml = errorMessage
     ? `<p class="login-error" role="alert">${escapeHtml(errorMessage)}</p>`
@@ -157,12 +159,4 @@ export function renderLoginPage(errorMessage?: string): string {
   </script>
 </body>
 </html>`;
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }

@@ -1,13 +1,6 @@
 import type { HealthSnapshot } from "../types.js";
+import { escapeHtml } from "./html.js";
 import { renderLayout } from "./layout.js";
-
-function esc(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
 
 function formatWhen(ms: number | null): string {
   if (ms == null) return "never";
@@ -44,7 +37,7 @@ export function renderHealthPage(snapshot: HealthSnapshot): string {
     snapshot.config_warnings.length === 0
       ? `<p style="color:var(--text-muted);">No configuration warnings.</p>`
       : `<ul class="warn-list">${snapshot.config_warnings
-          .map((w) => `<li>${esc(w)}</li>`)
+          .map((w) => `<li>${escapeHtml(w)}</li>`)
           .join("")}</ul>`;
 
   const cleanupSummary = snapshot.last_cleanup_summary
@@ -115,7 +108,7 @@ export function renderHealthPage(snapshot: HealthSnapshot): string {
 
     <div class="page-header">
       <h2>Health</h2>
-      <p>Diagnostics for ${esc(snapshot.local_date)} · America/New_York · snapshot ${formatWhen(now)}</p>
+      <p>Diagnostics for ${escapeHtml(snapshot.local_date)} · America/New_York · snapshot ${formatWhen(now)}</p>
     </div>
 
     <div class="summary-grid">
@@ -182,7 +175,7 @@ export function renderHealthPage(snapshot: HealthSnapshot): string {
       <p class="kv-note">Parsing failures = Invalid JSON. Zero detections means a valid payload stored with no face or plate events after filters.</p>
       ${
         snapshot.last_d1_error
-          ? `<p class="error-box">Last D1 error (${formatWhen(snapshot.last_d1_error_at_ms)}): ${esc(snapshot.last_d1_error)}</p>`
+          ? `<p class="error-box">Last D1 error (${formatWhen(snapshot.last_d1_error_at_ms)}): ${escapeHtml(snapshot.last_d1_error)}</p>`
           : ""
       }
     </div>
@@ -202,16 +195,16 @@ export function renderHealthPage(snapshot: HealthSnapshot): string {
           <tbody>
             <tr>
               <td>${formatWhen(snapshot.last_cron_report_at_ms)}</td>
-              <td>${snapshot.last_cron_report_date ? esc(snapshot.last_cron_report_date) : "—"}</td>
+              <td>${snapshot.last_cron_report_date ? escapeHtml(snapshot.last_cron_report_date) : "—"}</td>
               <td>${formatWhen(snapshot.last_cleanup_at_ms)}</td>
-              <td style="white-space:normal;font-size:0.85rem;">${esc(cleanupSummary)}</td>
+              <td style="white-space:normal;font-size:0.85rem;">${escapeHtml(cleanupSummary)}</td>
             </tr>
           </tbody>
         </table>
       </div>
       ${
         snapshot.last_cron_error
-          ? `<p class="error-box">Last cron error (${formatWhen(snapshot.last_cron_error.at_ms)}): ${esc(snapshot.last_cron_error.message)}</p>`
+          ? `<p class="error-box">Last cron error (${formatWhen(snapshot.last_cron_error.at_ms)}): ${escapeHtml(snapshot.last_cron_error.message)}</p>`
           : ""
       }
     </div>

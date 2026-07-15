@@ -1,17 +1,11 @@
 import { PersonDirectoryEntry, PersonProfile, PersonHeatmapDay } from "../types.js";
+import { normalizeJpegBase64 } from "../webhook/image.js";
+import { escapeHtml } from "./html.js";
 import { renderLayout } from "./layout.js";
 
-function esc(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function formatImageSrc(imageBase64: string): string {
-  if (imageBase64.startsWith("data:")) return imageBase64;
-  return `data:image/jpeg;base64,${imageBase64}`;
+function formatImageSrc(imageBase64: string): string | undefined {
+  const raw = normalizeJpegBase64(imageBase64);
+  return raw ? `data:image/jpeg;base64,${raw}` : undefined;
 }
 
 function formatDateTime(ms: number): string {
@@ -38,8 +32,8 @@ export function renderPeopleDirectory(people: PersonDirectoryEntry[]): string {
           .map((p) => {
             const href = profileHref(p.person_key);
             return `<tr>
-              <td><a href="${href}" style="color:inherit;text-decoration:none;font-weight:600;">${esc(p.person_name)}</a></td>
-              <td><code style="font-size:0.75rem;color:var(--text-muted);">${esc(p.person_key)}</code></td>
+              <td><a href="${href}" style="color:inherit;text-decoration:none;font-weight:600;">${escapeHtml(p.person_name)}</a></td>
+              <td><code style="font-size:0.75rem;color:var(--text-muted);">${escapeHtml(p.person_key)}</code></td>
               <td>${formatDateTime(p.last_seen_ms)}</td>
               <td>${p.event_count}</td>
             </tr>`;
@@ -124,7 +118,7 @@ function renderHeatmap(heatmap: PersonHeatmapDay[], personName: string): string 
           : `${dateStr}: no visits`;
         const href = `/events?date=${encodeURIComponent(dateStr)}&person=${encodeURIComponent(personName)}`;
         cells.push(
-          `<a class="heat-cell" href="${href}" title="${esc(title)}" style="--heat:${intensity.toFixed(3)}"></a>`
+          `<a class="heat-cell" href="${href}" title="${escapeHtml(title)}" style="--heat:${intensity.toFixed(3)}"></a>`
         );
       }
       const label = new Date(Date.UTC(y, m - 1, 1)).toLocaleString("en-US", {
@@ -132,7 +126,7 @@ function renderHeatmap(heatmap: PersonHeatmapDay[], personName: string): string 
         year: "numeric",
         timeZone: "UTC",
       });
-      return `<div class="heat-month"><div class="heat-month-label">${esc(label)}</div><div class="heat-grid">${cells.join("")}</div></div>`;
+      return `<div class="heat-month"><div class="heat-month-label">${escapeHtml(label)}</div><div class="heat-grid">${cells.join("")}</div></div>`;
     })
     .join("");
 
@@ -148,7 +142,7 @@ export function renderPersonProfile(profile: PersonProfile): string {
           .map((c) => {
             const pct = Math.round((c.event_count / maxCam) * 100);
             return `<div class="cam-row">
-              <code>${esc(c.camera_id)}</code>
+              <code>${escapeHtml(c.camera_id)}</code>
               <div class="cam-bar"><span style="width:${pct}%"></span></div>
               <span class="cam-count">${c.event_count}</span>
             </div>`;
@@ -156,14 +150,15 @@ export function renderPersonProfile(profile: PersonProfile): string {
           .join("");
 
   const thumbs = profile.recent_events
-    .filter((e) => e.image_base64)
+    .map((e) => {
+      const src = e.image_base64 ? formatImageSrc(e.image_base64) : undefined;
+      if (!src) return "";
+      return `<a class="thumb" href="/events?date=${encodeURIComponent(e.local_date)}&person=${encodeURIComponent(profile.person_name)}" title="${escapeHtml(formatDateTime(e.seen_at_ms))}">
+          <img src="${src}" alt="" loading="lazy" />
+        </a>`;
+    })
+    .filter(Boolean)
     .slice(0, 12)
-    .map(
-      (e) =>
-        `<a class="thumb" href="/events?date=${encodeURIComponent(e.local_date)}&person=${encodeURIComponent(profile.person_name)}" title="${esc(formatDateTime(e.seen_at_ms))}">
-          <img src="${formatImageSrc(e.image_base64!)}" alt="" loading="lazy" />
-        </a>`
-    )
     .join("");
 
   const historyRows =
@@ -173,8 +168,8 @@ export function renderPersonProfile(profile: PersonProfile): string {
           .map(
             (e) => `<tr>
               <td>${formatDateTime(e.seen_at_ms)}</td>
-              <td><code style="font-size:0.8rem;color:var(--text-muted);">${esc(e.camera_id)}</code></td>
-              <td><span class="badge">${esc(e.trigger_key)}</span></td>
+              <td><code style="font-size:0.8rem;color:var(--text-muted);">${escapeHtml(e.camera_id)}</code></td>
+              <td><span class="badge">${escapeHtml(e.trigger_key)}</span></td>
               <td><a href="/events?date=${encodeURIComponent(e.local_date)}&person=${encodeURIComponent(profile.person_name)}">Day log</a></td>
             </tr>`
           )
@@ -296,10 +291,10 @@ export function renderPersonProfile(profile: PersonProfile): string {
 
     <a class="back-link" href="/people">← All people</a>
     <div class="profile-header">
-      <h2>${esc(profile.person_name)}</h2>
+      <h2>${escapeHtml(profile.person_name)}</h2>
       <p class="profile-meta">
-        <code>${esc(profile.person_key)}</code>
-        ${profile.person_id ? ` · ID <code>${esc(profile.person_id)}</code>` : ""}
+        <code>${escapeHtml(profile.person_key)}</code>
+        ${profile.person_id ? ` · ID <code>${escapeHtml(profile.person_id)}</code>` : ""}
       </p>
       <p class="profile-meta">
         First recorded ${formatDateTime(profile.first_seen_ms)} ·
@@ -374,7 +369,7 @@ export function renderPersonNotFound(personKey: string): string {
   const body = `
     <div class="glass-card" style="padding:2rem;text-align:center;">
       <h2 style="font-family:var(--font-heading);margin-bottom:0.75rem;">Person not found</h2>
-      <p style="color:var(--text-muted);margin-bottom:1.25rem;">No events for <code>${esc(personKey)}</code>.</p>
+      <p style="color:var(--text-muted);margin-bottom:1.25rem;">No events for <code>${escapeHtml(personKey)}</code>.</p>
       <a href="/people" style="color:var(--primary);">← Back to people</a>
     </div>
   `;

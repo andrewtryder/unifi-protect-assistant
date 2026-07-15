@@ -1,4 +1,5 @@
 import { DailyReport, PersonSummary } from "../types.js";
+import { escapeHtml } from "./html.js";
 import { renderLayout } from "./layout.js";
 import { renderPeopleFilter, peopleFilterStyles } from "./peopleFilter.js";
 
@@ -62,9 +63,12 @@ export function renderCalendar(
         const wallHint = r.observed_rounded_hours != null
           ? `; wall ${r.rounded_span_hours}h first–last`
           : "";
-        const tooltip = `${r.person_name}: ${firstTime}–${lastTime}, observed ${observedHours}h${sessions}${wallHint}`;
+        const name = escapeHtml(r.person_name);
+        const tooltip = escapeHtml(
+          `${r.person_name}: ${firstTime}–${lastTime}, observed ${observedHours}h${sessions}${wallHint}`
+        );
         return `<div class="person-tag" title="${tooltip}">
-          <span class="dot"></span>${r.person_name} <strong>${observedHours}h</strong>
+          <span class="dot"></span>${name} <strong>${observedHours}h</strong>
         </div>`;
       }).join("");
     }

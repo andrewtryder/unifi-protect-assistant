@@ -1,20 +1,12 @@
 import { FaceEvent, PersonSummary } from "../types.js";
+import { normalizeJpegBase64 } from "../webhook/image.js";
+import { escapeHtml } from "./html.js";
 import { renderLayout } from "./layout.js";
 import { renderPeopleFilter, peopleFilterStyles } from "./peopleFilter.js";
 
-function formatImageSrc(imageBase64: string): string {
-  if (imageBase64.startsWith("data:")) {
-    return imageBase64;
-  }
-  return `data:image/jpeg;base64,${imageBase64}`;
-}
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+function formatImageSrc(imageBase64: string): string | undefined {
+  const raw = normalizeJpegBase64(imageBase64);
+  return raw ? `data:image/jpeg;base64,${raw}` : undefined;
 }
 
 /**
@@ -45,19 +37,21 @@ export function renderEventsLog(
       let imageCell = `<span class="no-image">&mdash;</span>`;
       if (e.image_base64) {
         const src = formatImageSrc(e.image_base64);
-        imageCell = `<a href="${src}" target="_blank" rel="noopener noreferrer" class="event-thumb-link">
+        if (src) {
+          imageCell = `<a href="${src}" target="_blank" rel="noopener noreferrer" class="event-thumb-link">
           <img src="${src}" alt="Detection thumbnail" class="event-thumb" loading="lazy" />
         </a>`;
+        }
       }
-      
+
       return `<tr>
         <td><span class="badge">${timeStr}</span></td>
-        <td><strong>${e.person_name}</strong></td>
+        <td><strong>${escapeHtml(e.person_name)}</strong></td>
         <td>${imageCell}</td>
-        <td><span class="badge badge-accent">${e.trigger_key}</span></td>
-        <td><code>${e.camera_id}</code></td>
-        <td><code>${e.event_id}</code></td>
-        <td>${e.alarm_name}</td>
+        <td><span class="badge badge-accent">${escapeHtml(e.trigger_key)}</span></td>
+        <td><code>${escapeHtml(e.camera_id)}</code></td>
+        <td><code>${escapeHtml(e.event_id)}</code></td>
+        <td>${escapeHtml(e.alarm_name)}</td>
       </tr>`;
     }).join("");
   }

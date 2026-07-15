@@ -1,5 +1,6 @@
 import { Env, UnifiWebhookPayload } from "./types.js";
 import { parseWebhookPayload, getLocalDate } from "./webhook/parser.js";
+import { normalizeJpegBase64 } from "./webhook/image.js";
 import { ingestWebhook } from "./webhook/ingester.js";
 import {
   getReportsForMonth,
@@ -175,9 +176,9 @@ export default withHoneybadger(
         const eventId = payload.alarm?.triggers?.[0]?.eventId || "N/A";
         const alarmName = payload.alarm?.name || "N/A";
 
-        // Try extracting top-level or nested image Base64 string
-        const payloadImageRaw = String((payload as any).image || payload.alarm?.image || "");
-        const imageBase64 = payloadImageRaw.startsWith("data:") || /^[A-Za-z0-9+/=]+$/.test(payloadImageRaw) ? payloadImageRaw : undefined;
+        const imageBase64 = normalizeJpegBase64(
+          (payload as any).image || payload.alarm?.image || ""
+        );
 
         const ingestResult = await ingestWebhook(
           env,

@@ -1,4 +1,5 @@
 import { PersonSummary } from "../types.js";
+import { escapeHtml } from "./html.js";
 
 /**
  * Builds a query string preserving an existing param and optionally adding person.
@@ -34,7 +35,7 @@ export function renderPeopleFilter(
         ? " selected"
         : "";
       const label = `${escapeHtml(p.person_name)} (${p.event_count})`;
-      return `<option value="${escapeAttr(p.person_name)}"${selected}>${label}</option>`;
+      return `<option value="${escapeHtml(p.person_name)}"${selected}>${label}</option>`;
     }),
   ].join("");
 
@@ -56,21 +57,6 @@ export function renderPeopleFilter(
       }
     </script>
   `;
-}
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function escapeAttr(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/"/g, "&quot;")
-    .replace(/</g, "&lt;");
 }
 
 export const peopleFilterStyles = `

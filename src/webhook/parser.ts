@@ -1,4 +1,5 @@
 import { FaceEvent, VehicleEvent, Env } from "../types.js";
+import { normalizeJpegBase64 } from "./image.js";
 
 export interface ParsedWebhookEvents {
   faceEvents: FaceEvent[];
@@ -36,10 +37,7 @@ function uniquifyTestEventId(eventId: string): string {
 }
 
 function extractImageBase64(trigger: any, payload: any, alarm: any): string | undefined {
-  const triggerImage = String(trigger.image || payload.image || alarm.image || "");
-  return triggerImage.startsWith("data:") || /^[A-Za-z0-9+/=]+$/.test(triggerImage)
-    ? triggerImage
-    : undefined;
+  return normalizeJpegBase64(trigger.image || payload.image || alarm.image || "");
 }
 
 /**

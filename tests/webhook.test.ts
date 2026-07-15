@@ -1,10 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { parseWebhookPayload, getLocalDate, normalizePlateKey } from "../src/webhook/parser.js";
+import { MAX_IMAGE_BASE64_LENGTH, normalizeJpegBase64 } from "../src/webhook/image.js";
 import { Env } from "../src/types.js";
 import sampleKnown from "../fixtures/sample_face_known.json";
 import sampleUnknown from "../fixtures/sample_face_unknown.json";
 import samplePlate from "../fixtures/sample_license_plate_known.json";
 import samplePlateTest from "../fixtures/sample_license_plate_test.json";
+
+const VALID_JPEG_B64 = "abcXYZ012+/==";
 
 describe("Webhook Parser & Matching Tests", () => {
   const mockEnv: Env = {
@@ -134,5 +137,84 @@ describe("getLocalDate", () => {
   it("formats in the given timezone", () => {
     // Fixed UTC instant
     expect(getLocalDate(1746970986798, "UTC")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+});
+
+describe("normalizeJpegBase64", () => {
+  it("keeps bare JPEG base64", () => {
+    expect(normalizeJpegBase64(VALID_JPEG_B64)).toBe(VALID_JPEG_B64);
+  });
+
+  it("strips a jpeg data URL prefix", () => {
+    expect(normalizeJpegBase64(`data:image/jpeg;base64,${VALID_JPEG_B64}`)).toBe(VALID_JPEG_B64);
+    expect(normalizeJpegBase64(`DATA:IMAGE/JPEG;BASE64,${VALID_JPEG_B64}`)).toBe(VALID_JPEG_B64);
+  });
+
+  it("rejects non-jpeg and non-image data URLs", () => {
+    expect(normalizeJpegBase64("data:text/html,<script>alert(1)</script>")).toBeUndefined();
+    expect(normalizeJpegBase64("data:image/svg+xml;base64,PHN2Zz4=")).toBeUndefined();
+    expect(normalizeJpegBase64(`data:image/png;base64,${VALID_JPEG_B64}`)).toBeUndefined();
+  });
+
+  it("rejects non-base64 junk and oversized payloads", () => {
+    expect(normalizeJpegBase64("not valid!!!")).toBeUndefined();
+    expect(normalizeJpegBase64("a".repeat(MAX_IMAGE_BASE64_LENGTH + 1))).toBeUndefined();
+  });
+});
+
+describe("parseWebhookPayload image handling", () => {
+  const mockEnv: Env = {
+    DB: {} as any,
+    KV: {} as any,
+    TIMEZONE: "America/New_York",
+  };
+
+  function payloadWithImage(image: string) {
+    return {
+      alarm: {
+        name: "With Image",
+        conditions: [{ condition: { type: "is", source: "face_known", value: "pid" } }],
+        triggers: [
+          {
+            device: "cam1",
+            value: "Alice",
+            key: "face_known",
+            eventId: "face-img",
+            timestamp: 1000,
+            image,
+          },
+        ],
+      },
+      timestamp: 1000,
+    };
+  }
+
+  it("stores raw base64 from a jpeg data URL", () => {
+    const { faceEvents } = parseWebhookPayload(
+      payloadWithImage(`data:image/jpeg;base64,${VALID_JPEG_B64}`),
+      "n-img",
+      mockEnv
+    );
+    expect(faceEvents[0].image_base64).toBe(VALID_JPEG_B64);
+  });
+
+  it("stores bare jpeg base64", () => {
+    const { faceEvents } = parseWebhookPayload(
+      payloadWithImage(VALID_JPEG_B64),
+      "n-img",
+      mockEnv
+    );
+    expect(faceEvents[0].image_base64).toBe(VALID_JPEG_B64);
+  });
+
+  it("drops unsafe image payloads", () => {
+    for (const image of [
+      "data:text/html,<script>alert(1)</script>",
+      "data:image/svg+xml;base64,PHN2Zz4=",
+      `data:image/png;base64,${VALID_JPEG_B64}`,
+    ]) {
+      const { faceEvents } = parseWebhookPayload(payloadWithImage(image), "n-bad", mockEnv);
+      expect(faceEvents[0].image_base64).toBeUndefined();
+    }
   });
 });
