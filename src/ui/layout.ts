@@ -97,6 +97,12 @@ export function renderLayout(
       display: flex;
       align-items: center;
       gap: 0.55rem;
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .brand:hover h1 {
+      color: var(--text);
     }
 
     .brand-mark {
@@ -255,10 +261,10 @@ export function renderLayout(
 </head>
 <body>
   <header>
-    <div class="brand">
+    <a href="/" class="brand">
       <span class="brand-mark"></span>
       <h1>UniFi Protect Assistant</h1>
-    </div>
+    </a>
     <nav>
       <a href="/today" id="nav-today">Today</a>
       <a href="/people" id="nav-people">People</a>
