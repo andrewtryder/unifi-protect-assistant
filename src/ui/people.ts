@@ -44,7 +44,7 @@ export function renderPeopleDirectory(people: PersonDirectoryEntry[]): string {
     <style>
       .page-header { margin-bottom: 1.5rem; }
       .page-header h2 {
-        font-family: var(--font-heading);
+        font-family: var(--font);
         font-size: 1.75rem;
         font-weight: 700;
       }
@@ -54,7 +54,7 @@ export function renderPeopleDirectory(people: PersonDirectoryEntry[]): string {
       <h2>People</h2>
       <p>Profiles keyed by stable person identity from UniFi Protect.</p>
     </div>
-    <div class="glass-card">
+    <div class="card">
       <div class="table-container">
         <table>
           <thead>
@@ -175,7 +175,7 @@ export function renderPersonProfile(profile: PersonProfile): string {
     <style>
       .profile-header { margin-bottom: 1.5rem; }
       .profile-header h2 {
-        font-family: var(--font-heading);
+        font-family: var(--font);
         font-size: 1.75rem;
         font-weight: 700;
       }
@@ -197,13 +197,13 @@ export function renderPersonProfile(profile: PersonProfile): string {
         margin-bottom: 0.35rem;
       }
       .summary-card .value {
-        font-family: var(--font-heading);
+        font-family: var(--font);
         font-size: 1.35rem;
         font-weight: 700;
       }
       .section { margin-bottom: 1.5rem; }
       .section h3 {
-        font-family: var(--font-heading);
+        font-family: var(--font);
         font-size: 1.05rem;
         font-weight: 600;
         margin-bottom: 0.75rem;
@@ -217,16 +217,16 @@ export function renderPersonProfile(profile: PersonProfile): string {
         font-size: 0.85rem;
       }
       .cam-bar {
-        height: 8px;
-        background: rgba(255,255,255,0.06);
-        border-radius: 4px;
+        height: 6px;
+        background: var(--surface-2);
+        border-radius: 3px;
         overflow: hidden;
       }
       .cam-bar span {
         display: block;
         height: 100%;
-        background: linear-gradient(90deg, #6366f1, #10b981);
-        border-radius: 4px;
+        background: var(--accent);
+        border-radius: 3px;
       }
       .cam-count { color: var(--text-muted); }
       .heat-wrap {
@@ -248,8 +248,8 @@ export function renderPersonProfile(profile: PersonProfile): string {
         width: 12px;
         height: 12px;
         border-radius: 2px;
-        background: rgba(16, 185, 129, calc(0.12 + var(--heat, 0) * 0.88));
-        border: 1px solid rgba(255,255,255,0.04);
+        background: rgba(52, 199, 123, calc(0.12 + var(--heat, 0) * 0.88));
+        border: 1px solid var(--border);
         display: block;
       }
       .heat-cell.empty {
@@ -299,48 +299,48 @@ export function renderPersonProfile(profile: PersonProfile): string {
     </div>
 
     <div class="summary-grid">
-      <div class="glass-card summary-card">
+      <div class="card summary-card">
         <div class="label">Visits</div>
         <div class="value">${profile.visit_count}</div>
       </div>
-      <div class="glass-card summary-card">
+      <div class="card summary-card">
         <div class="label">Observed</div>
         <div class="value">${profile.observed_rounded_hours}h</div>
       </div>
-      <div class="glass-card summary-card">
+      <div class="card summary-card">
         <div class="label">Typical arrival</div>
         <div class="value">${profile.typical_arrival_label || "—"}</div>
       </div>
-      <div class="glass-card summary-card">
+      <div class="card summary-card">
         <div class="label">Typical departure</div>
         <div class="value">${profile.typical_departure_label || "—"}</div>
       </div>
-      <div class="glass-card summary-card">
+      <div class="card summary-card">
         <div class="label">Events</div>
         <div class="value">${profile.event_count}</div>
       </div>
     </div>
 
-    <div class="section glass-card">
+    <div class="section card">
       <h3>Most frequent cameras</h3>
       ${camerasHtml}
     </div>
 
-    <div class="section glass-card">
+    <div class="section card">
       <h3>Calendar heatmap <span style="color:var(--text-muted);font-weight:400;font-size:0.85rem;">(last 12 months · observed presence)</span></h3>
       ${renderHeatmap(profile.heatmap, profile.person_name)}
     </div>
 
     ${
       thumbs
-        ? `<div class="section glass-card">
+        ? `<div class="section card">
             <h3>Recent thumbnails</h3>
             <div class="thumb-grid">${thumbs}</div>
           </div>`
         : ""
     }
 
-    <div class="section glass-card">
+    <div class="section card">
       <h3>Recent event history</h3>
       <div class="table-container">
         <table>
@@ -363,10 +363,10 @@ export function renderPersonProfile(profile: PersonProfile): string {
 
 export function renderPersonNotFound(personKey: string): string {
   const body = `
-    <div class="glass-card" style="padding:2rem;text-align:center;">
-      <h2 style="font-family:var(--font-heading);margin-bottom:0.75rem;">Person not found</h2>
+    <div class="card" style="padding:2rem;text-align:center;">
+      <h2 style="font-family:var(--font);margin-bottom:0.75rem;">Person not found</h2>
       <p style="color:var(--text-muted);margin-bottom:1.25rem;">No events for <code>${escapeHtml(personKey)}</code>.</p>
-      <a href="/people" style="color:var(--primary);">← Back to people</a>
+      <a href="/people" style="color:var(--accent);">← Back to people</a>
     </div>
   `;
   return renderLayout("Not found", body);

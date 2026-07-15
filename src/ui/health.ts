@@ -50,7 +50,7 @@ export function renderHealthPage(snapshot: HealthSnapshot): string {
     <style>
       .page-header { margin-bottom: 1.5rem; }
       .page-header h2 {
-        font-family: var(--font-heading);
+        font-family: var(--font);
         font-size: 1.75rem;
         font-weight: 700;
       }
@@ -71,7 +71,7 @@ export function renderHealthPage(snapshot: HealthSnapshot): string {
         margin-bottom: 0.35rem;
       }
       .summary-card .value {
-        font-family: var(--font-heading);
+        font-family: var(--font);
         font-size: 1.25rem;
         font-weight: 700;
       }
@@ -82,7 +82,7 @@ export function renderHealthPage(snapshot: HealthSnapshot): string {
       }
       .section { margin-bottom: 1.5rem; }
       .section h3 {
-        font-family: var(--font-heading);
+        font-family: var(--font);
         font-size: 1.05rem;
         font-weight: 600;
         margin-bottom: 0.75rem;
@@ -90,7 +90,7 @@ export function renderHealthPage(snapshot: HealthSnapshot): string {
       .warn-list {
         margin: 0;
         padding-left: 1.25rem;
-        color: #fbbf24;
+        color: var(--warning);
         line-height: 1.6;
       }
       .kv-note {
@@ -99,7 +99,7 @@ export function renderHealthPage(snapshot: HealthSnapshot): string {
         margin-top: 0.75rem;
       }
       .error-box {
-        color: #f87171;
+        color: var(--danger);
         font-size: 0.85rem;
         margin-top: 0.5rem;
         word-break: break-word;
@@ -112,31 +112,31 @@ export function renderHealthPage(snapshot: HealthSnapshot): string {
     </div>
 
     <div class="summary-grid">
-      <div class="glass-card summary-card">
+      <div class="card summary-card">
         <div class="label">Webhook status</div>
         <div class="value"><span class="badge ${healthClass}">${healthLabel}</span></div>
         <div class="sub">Last ${formatAge(snapshot.last_webhook_at_ms, now)}</div>
       </div>
-      <div class="glass-card summary-card">
+      <div class="card summary-card">
         <div class="label">Last webhook</div>
         <div class="value" style="font-size:0.95rem;">${formatWhen(snapshot.last_webhook_at_ms)}</div>
       </div>
-      <div class="glass-card summary-card">
+      <div class="card summary-card">
         <div class="label">Last event</div>
         <div class="value" style="font-size:0.95rem;">${formatWhen(snapshot.last_event_at_ms)}</div>
         <div class="sub">${formatAge(snapshot.last_event_at_ms, now)}</div>
       </div>
-      <div class="glass-card summary-card">
+      <div class="card summary-card">
         <div class="label">Events 1h / 24h</div>
         <div class="value">${snapshot.events_last_hour} / ${snapshot.events_last_day}</div>
       </div>
-      <div class="glass-card summary-card">
+      <div class="card summary-card">
         <div class="label">Webhooks 1h / 24h</div>
         <div class="value">${snapshot.webhooks_last_hour} / ${snapshot.webhooks_last_day}</div>
       </div>
     </div>
 
-    <div class="section glass-card">
+    <div class="section card">
       <h3>Today’s ingest counters <span style="color:var(--text-muted);font-weight:400;font-size:0.85rem;">(KV · since deploy or midnight)</span></h3>
       <div class="table-container">
         <table>
@@ -180,7 +180,7 @@ export function renderHealthPage(snapshot: HealthSnapshot): string {
       }
     </div>
 
-    <div class="section glass-card">
+    <div class="section card">
       <h3>Cron / maintenance</h3>
       <div class="table-container">
         <table>
@@ -209,7 +209,7 @@ export function renderHealthPage(snapshot: HealthSnapshot): string {
       }
     </div>
 
-    <div class="section glass-card">
+    <div class="section card">
       <h3>Database usage <span style="color:var(--text-muted);font-weight:400;font-size:0.85rem;">(row counts)</span></h3>
       <div class="table-container">
         <table>
@@ -236,7 +236,7 @@ export function renderHealthPage(snapshot: HealthSnapshot): string {
       <p class="kv-note">Byte size and storage quotas are visible in the Cloudflare D1 dashboard, not via the Worker API.</p>
     </div>
 
-    <div class="section glass-card">
+    <div class="section card">
       <h3>Configuration warnings</h3>
       ${warningsHtml}
     </div>

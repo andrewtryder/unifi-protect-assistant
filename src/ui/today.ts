@@ -77,7 +77,7 @@ export function renderTodayDashboard(snapshot: TodaySnapshot): string {
         flex-wrap: wrap;
       }
       .today-header h2 {
-        font-family: var(--font-heading);
+        font-family: var(--font);
         font-size: 1.75rem;
         font-weight: 700;
       }
@@ -103,7 +103,7 @@ export function renderTodayDashboard(snapshot: TodaySnapshot): string {
         margin-bottom: 0.35rem;
       }
       .summary-card .value {
-        font-family: var(--font-heading);
+        font-family: var(--font);
         font-size: 1.6rem;
         font-weight: 700;
       }
@@ -116,17 +116,17 @@ export function renderTodayDashboard(snapshot: TodaySnapshot): string {
         margin-bottom: 1.5rem;
       }
       .today-section h3 {
-        font-family: var(--font-heading);
+        font-family: var(--font);
         font-size: 1.05rem;
         font-weight: 600;
         margin-bottom: 0.75rem;
       }
       .poll-dot {
         display: inline-block;
-        width: 8px;
-        height: 8px;
+        width: 6px;
+        height: 6px;
         border-radius: 50%;
-        background: var(--accent);
+        background: var(--success);
         margin-right: 0.4rem;
         animation: pulse 2s ease-in-out infinite;
       }
@@ -145,30 +145,30 @@ export function renderTodayDashboard(snapshot: TodaySnapshot): string {
     </div>
 
     <div class="summary-grid" id="summary-grid">
-      <div class="glass-card summary-card">
+      <div class="card summary-card">
         <div class="label">Present now</div>
         <div class="value" data-field="present_count">${snapshot.present_count}</div>
       </div>
-      <div class="glass-card summary-card">
+      <div class="card summary-card">
         <div class="label">Seen today</div>
         <div class="value" data-field="seen_today_count">${snapshot.seen_today_count}</div>
       </div>
-      <div class="glass-card summary-card">
+      <div class="card summary-card">
         <div class="label">Unknown faces</div>
         <div class="value" data-field="unknown_face_count">${snapshot.unknown_face_count}</div>
       </div>
-      <div class="glass-card summary-card">
+      <div class="card summary-card">
         <div class="label">Events (1h)</div>
         <div class="value" data-field="events_last_hour">${snapshot.events_last_hour}</div>
       </div>
-      <div class="glass-card summary-card">
+      <div class="card summary-card">
         <div class="label">Webhook</div>
         <div class="value" style="font-size:1.1rem;"><span class="badge ${healthClass}" data-field="webhook_status">${healthLabel}</span></div>
         <div class="sub" data-field="webhook_sub">Last ${formatAge(snapshot.webhook.last_received_at_ms, nowMs)} · ${snapshot.webhook.count_last_hour} in last hour</div>
       </div>
     </div>
 
-    <div class="today-section glass-card">
+    <div class="today-section card">
       <h3>People today</h3>
       <div class="table-container">
         <table>
@@ -190,7 +190,7 @@ export function renderTodayDashboard(snapshot: TodaySnapshot): string {
       </div>
     </div>
 
-    <div class="today-section glass-card">
+    <div class="today-section card">
       <h3>Live event stream</h3>
       <div class="table-container">
         <table>

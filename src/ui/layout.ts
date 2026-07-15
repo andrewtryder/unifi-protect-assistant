@@ -25,20 +25,38 @@ export function renderLayout(
   <title>${escapeHtml(title)} | UniFi Protect Assistant</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Plus+Jakarta+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
+    /* ---------------------------------------------------
+       Design tokens
+       --------------------------------------------------- */
     :root {
-      --bg: #090b11;
-      --panel: rgba(17, 22, 34, 0.75);
-      --border: rgba(255, 255, 255, 0.08);
-      --text: #f3f4f6;
-      --text-muted: #9ca3af;
-      --primary: #6366f1;
-      --primary-glow: rgba(99, 102, 241, 0.15);
-      --accent: #10b981;
-      --accent-glow: rgba(16, 185, 129, 0.15);
-      --font-heading: 'Outfit', sans-serif;
-      --font-body: 'Plus Jakarta Sans', sans-serif;
+      --bg: #0a0a0c;
+      --surface: #131316;
+      --surface-2: #1a1a1e;
+      --border: #232328;
+      --border-strong: #333338;
+
+      --text: #e8e8ea;
+      --text-muted: #96969e;
+      --text-faint: #616167;
+
+      --accent: #4d82f3;
+      --accent-soft: rgba(77, 130, 243, 0.14);
+
+      --success: #34c77b;
+      --success-soft: rgba(52, 199, 123, 0.14);
+
+      --warning: #e0a63c;
+      --warning-soft: rgba(224, 166, 60, 0.14);
+
+      --danger: #e5674f;
+      --danger-soft: rgba(229, 103, 79, 0.14);
+
+      --radius-sm: 6px;
+      --radius-md: 10px;
+
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
     * {
@@ -48,45 +66,57 @@ export function renderLayout(
     }
 
     body {
-      background-color: var(--bg);
-      background-image: 
-        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.1) 0px, transparent 50%),
-        radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.08) 0px, transparent 50%);
-      background-attachment: fixed;
+      background: var(--bg);
       color: var(--text);
-      font-family: var(--font-body);
+      font-family: var(--font);
+      font-size: 14px;
       line-height: 1.5;
       padding: 1.5rem;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
+      -webkit-font-smoothing: antialiased;
     }
 
+    /* ---------------------------------------------------
+       Shell: header / nav / main / footer
+       --------------------------------------------------- */
     header {
       width: 100%;
-      max-width: 1200px;
+      max-width: 1160px;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 2rem;
+      margin-bottom: 1.75rem;
       padding-bottom: 1rem;
       border-bottom: 1px solid var(--border);
     }
 
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+    }
+
+    .brand-mark {
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+      background: var(--accent);
+      flex-shrink: 0;
+    }
+
     h1 {
-      font-family: var(--font-heading);
-      font-size: 1.5rem;
-      font-weight: 800;
-      letter-spacing: -0.025em;
-      background: linear-gradient(135deg, #a5b4fc 0%, #6366f1 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      font-size: 0.95rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--text);
     }
 
     nav {
       display: flex;
-      gap: 1rem;
+      gap: 0.25rem;
       align-items: center;
       flex-wrap: wrap;
     }
@@ -95,59 +125,61 @@ export function renderLayout(
       color: var(--text-muted);
       text-decoration: none;
       font-weight: 500;
-      font-size: 0.9rem;
-      padding: 0.5rem 1rem;
-      border-radius: 8px;
-      transition: all 0.2s ease;
-      border: 1px solid transparent;
+      font-size: 0.85rem;
+      padding: 0.4rem 0.75rem;
+      border-radius: var(--radius-sm);
+      transition: color 0.15s ease, background-color 0.15s ease;
+      border: none;
       background: transparent;
-      font-family: var(--font-body);
+      font-family: var(--font);
       cursor: pointer;
     }
 
-    nav a:hover, nav a.active, nav button.sign-out:hover {
+    nav a:hover, nav button.sign-out:hover {
       color: var(--text);
-      background: var(--panel);
-      border-color: var(--border);
+      background: var(--surface);
+    }
+
+    nav a.active {
+      color: var(--text);
+      background: var(--surface-2);
     }
 
     main {
       width: 100%;
-      max-width: 1200px;
+      max-width: 1160px;
       flex: 1;
     }
 
     footer {
       width: 100%;
-      max-width: 1200px;
+      max-width: 1160px;
       text-align: center;
-      padding: 2rem 0;
-      color: var(--text-muted);
-      font-size: 0.8rem;
+      padding: 1.75rem 0 0.5rem;
+      color: var(--text-faint);
+      font-size: 0.78rem;
       border-top: 1px solid var(--border);
-      margin-top: 3rem;
+      margin-top: 2.5rem;
     }
 
     footer a {
-      color: var(--primary);
+      color: var(--accent);
       text-decoration: none;
     }
 
-    /* Glassmorphism utility card */
-    .glass-card {
-      background: var(--panel);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+    /* ---------------------------------------------------
+       Core components
+       --------------------------------------------------- */
+    .card {
+      background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 1.5rem;
-      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+      border-radius: var(--radius-md);
+      padding: 1.25rem;
     }
 
-    /* Standard tables and layout grids */
     .table-container {
       overflow-x: auto;
-      margin-top: 1rem;
+      margin-top: 0.75rem;
     }
 
     table {
@@ -157,20 +189,20 @@ export function renderLayout(
     }
 
     th {
-      font-family: var(--font-heading);
       font-weight: 600;
       text-transform: uppercase;
-      font-size: 0.75rem;
-      letter-spacing: 0.05em;
-      color: var(--text-muted);
-      padding: 0.75rem 1rem;
+      font-size: 0.7rem;
+      letter-spacing: 0.04em;
+      color: var(--text-faint);
+      padding: 0.6rem 0.85rem;
       border-bottom: 1px solid var(--border);
+      white-space: nowrap;
     }
 
     td {
-      padding: 1rem;
+      padding: 0.75rem 0.85rem;
       border-bottom: 1px solid var(--border);
-      font-size: 0.9rem;
+      font-size: 0.86rem;
       white-space: nowrap;
     }
 
@@ -179,22 +211,27 @@ export function renderLayout(
     }
 
     tr:hover td {
-      background: rgba(255, 255, 255, 0.02);
+      background: var(--surface-2);
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.82em;
     }
 
     .badge {
       display: inline-block;
-      padding: 0.25rem 0.5rem;
-      border-radius: 6px;
-      font-size: 0.75rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: var(--radius-sm);
+      font-size: 0.72rem;
       font-weight: 600;
-      background: rgba(99, 102, 241, 0.15);
-      color: #a5b4fc;
+      background: var(--accent-soft);
+      color: var(--accent);
     }
 
     .badge-accent {
-      background: rgba(16, 185, 129, 0.15);
-      color: #34d399;
+      background: var(--success-soft);
+      color: var(--success);
     }
 
     @media (max-width: 640px) {
@@ -203,7 +240,7 @@ export function renderLayout(
       }
       header {
         flex-direction: column;
-        gap: 1rem;
+        gap: 0.85rem;
         align-items: flex-start;
       }
       nav {
@@ -218,7 +255,10 @@ export function renderLayout(
 </head>
 <body>
   <header>
-    <h1>UniFi Protect Assistant</h1>
+    <div class="brand">
+      <span class="brand-mark"></span>
+      <h1>UniFi Protect Assistant</h1>
+    </div>
     <nav>
       <a href="/today" id="nav-today">Today</a>
       <a href="/people" id="nav-people">People</a>
@@ -228,7 +268,7 @@ export function renderLayout(
       <button type="button" class="sign-out" id="sign-out">Sign out</button>
     </nav>
   </header>
-  
+
   <main>
     ${bodyContent}
   </main>

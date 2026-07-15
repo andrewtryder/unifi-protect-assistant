@@ -93,7 +93,7 @@ export function renderEventsLog(
         gap: 0.75rem;
       }
       .events-title {
-        font-family: var(--font-heading);
+        font-family: var(--font);
         font-size: 1.5rem;
         font-weight: 700;
       }
@@ -104,7 +104,7 @@ export function renderEventsLog(
         flex-wrap: wrap;
       }
       .back-btn, .nav-btn {
-        background: var(--panel);
+        background: var(--surface);
         border: 1px solid var(--border);
         color: var(--text);
         padding: 0.5rem 1rem;
@@ -121,8 +121,8 @@ export function renderEventsLog(
         padding: 0.5rem 0.75rem;
       }
       .back-btn:hover, .nav-btn:hover {
-        background: rgba(255, 255, 255, 0.05);
-        border-color: var(--primary);
+        background: var(--surface-2);
+        border-color: var(--accent);
       }
       .date-filter {
         display: flex;
@@ -137,39 +137,39 @@ export function renderEventsLog(
         letter-spacing: 0.05em;
       }
       .date-filter-input {
-        background: var(--panel);
+        background: var(--surface);
         border: 1px solid var(--border);
         color: var(--text);
         padding: 0.5rem 0.75rem;
         border-radius: 8px;
-        font-family: var(--font-body);
+        font-family: var(--font);
         font-size: 0.9rem;
         font-weight: 500;
         cursor: pointer;
         transition: all 0.2s ease;
         color-scheme: dark;
       }
-      .date-filter-input:hover,
+      .date-filter-input:hover {
+        border-color: var(--border-strong);
+      }
       .date-filter-input:focus {
-        border-color: var(--primary);
+        border-color: var(--accent);
         outline: none;
-        box-shadow: 0 0 8px var(--primary-glow);
       }
       .event-thumb-link {
         display: inline-block;
         line-height: 0;
       }
       .event-thumb {
-        width: 48px;
-        height: 48px;
+        width: 44px;
+        height: 44px;
         object-fit: cover;
-        border-radius: 8px;
+        border-radius: var(--radius-sm);
         border: 1px solid var(--border);
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        transition: border-color 0.15s ease;
       }
       .event-thumb:hover {
-        transform: scale(1.1);
-        box-shadow: 0 0 12px var(--primary-glow);
+        border-color: var(--accent);
       }
       .no-image {
         color: var(--text-muted);
@@ -204,7 +204,7 @@ export function renderEventsLog(
       }
     </script>
 
-    <div class="glass-card table-container">
+    <div class="card table-container">
       <table>
         <thead>
           <tr>

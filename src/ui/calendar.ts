@@ -115,12 +115,12 @@ export function renderCalendar(
         flex-wrap: wrap;
       }
       .month-title {
-        font-family: var(--font-heading);
+        font-family: var(--font);
         font-size: 1.5rem;
         font-weight: 700;
       }
       .nav-btn {
-        background: var(--panel);
+        background: var(--surface);
         border: 1px solid var(--border);
         color: var(--text);
         padding: 0.5rem 1rem;
@@ -130,8 +130,8 @@ export function renderCalendar(
         transition: all 0.2s ease;
       }
       .nav-btn:hover {
-        background: rgba(255, 255, 255, 0.05);
-        border-color: var(--primary);
+        background: var(--surface-2);
+        border-color: var(--accent);
       }
       .calendar-grid {
         display: grid;
@@ -151,7 +151,7 @@ export function renderCalendar(
         color: inherit;
       }
       .day-cell {
-        background: var(--panel);
+        background: var(--surface);
         border: 1px solid var(--border);
         border-radius: 12px;
         aspect-ratio: 1.2;
@@ -164,9 +164,8 @@ export function renderCalendar(
         min-height: 80px;
       }
       .day-cell:hover {
-        border-color: var(--primary);
-        box-shadow: 0 0 12px var(--primary-glow);
-        transform: translateY(-2px);
+        border-color: var(--border-strong);
+        background: var(--surface-2);
       }
       .day-number {
         font-weight: 700;
@@ -186,8 +185,8 @@ export function renderCalendar(
       }
       .person-tag {
         font-size: 0.7rem;
-        background: rgba(99, 102, 241, 0.12);
-        border: 1px solid rgba(99, 102, 241, 0.2);
+        background: var(--accent-soft);
+        border: none;
         padding: 2px 6px;
         border-radius: 6px;
         display: flex;
@@ -201,7 +200,7 @@ export function renderCalendar(
         width: 6px;
         height: 6px;
         border-radius: 50%;
-        background: var(--primary);
+        background: var(--accent);
         display: inline-block;
       }
       .empty {
@@ -243,7 +242,7 @@ export function renderCalendar(
       </div>
     </div>
     
-    <div class="calendar-grid glass-card">
+    <div class="calendar-grid card">
       <div class="weekday">Sun</div>
       <div class="weekday">Mon</div>
       <div class="weekday">Tue</div>

@@ -13,97 +13,95 @@ export function renderLoginPage(errorMessage?: string): string {
   <title>Sign In | UniFi Protect Assistant</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Plus+Jakarta+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #090b11;
-      --panel: rgba(17, 22, 34, 0.75);
-      --border: rgba(255, 255, 255, 0.08);
-      --text: #f3f4f6;
-      --text-muted: #9ca3af;
-      --primary: #6366f1;
-      --font-heading: 'Outfit', sans-serif;
-      --font-body: 'Plus Jakarta Sans', sans-serif;
+      --bg: #0a0a0c;
+      --surface: #131316;
+      --border: #232328;
+      --text: #e8e8ea;
+      --text-muted: #96969e;
+      --accent: #4d82f3;
+      --danger: #e5674f;
+      --danger-soft: rgba(229, 103, 79, 0.14);
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      background-color: var(--bg);
-      background-image:
-        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.1) 0px, transparent 50%),
-        radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.08) 0px, transparent 50%);
-      background-attachment: fixed;
+      background: var(--bg);
       color: var(--text);
-      font-family: var(--font-body);
+      font-family: var(--font);
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 1.5rem;
+      -webkit-font-smoothing: antialiased;
     }
 
     .login-card {
       width: 100%;
-      max-width: 400px;
-      background: var(--panel);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+      max-width: 360px;
+      background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 2.5rem 2rem;
-      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+      border-radius: 10px;
+      padding: 2.25rem 1.75rem;
       text-align: center;
     }
 
+    .brand-mark {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      background: var(--accent);
+      margin: 0 auto 1rem;
+    }
+
     h1 {
-      font-family: var(--font-heading);
-      font-size: 1.5rem;
-      font-weight: 800;
-      letter-spacing: -0.025em;
-      background: linear-gradient(135deg, #a5b4fc 0%, #6366f1 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      margin-bottom: 0.5rem;
+      font-size: 1.05rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      margin-bottom: 0.4rem;
     }
 
     .login-subtitle {
       color: var(--text-muted);
-      font-size: 0.9rem;
-      margin-bottom: 2rem;
+      font-size: 0.85rem;
+      margin-bottom: 1.75rem;
     }
 
     .login-error {
-      color: #f87171;
-      background: rgba(248, 113, 113, 0.1);
-      border: 1px solid rgba(248, 113, 113, 0.25);
-      border-radius: 8px;
-      padding: 0.75rem 1rem;
-      font-size: 0.85rem;
-      margin-bottom: 1.25rem;
+      color: var(--danger);
+      background: var(--danger-soft);
+      border-radius: 6px;
+      padding: 0.65rem 0.85rem;
+      font-size: 0.82rem;
+      margin-bottom: 1.1rem;
     }
 
     .google-btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 0.75rem;
+      gap: 0.65rem;
       width: 100%;
-      padding: 0.85rem 1.25rem;
-      border-radius: 10px;
+      padding: 0.7rem 1.1rem;
+      border-radius: 8px;
       border: 1px solid var(--border);
-      background: rgba(255, 255, 255, 0.06);
+      background: var(--bg);
       color: var(--text);
-      font-family: var(--font-body);
-      font-size: 0.95rem;
-      font-weight: 600;
+      font-family: var(--font);
+      font-size: 0.88rem;
+      font-weight: 500;
       cursor: pointer;
-      transition: background 0.2s ease, border-color 0.2s ease;
+      transition: border-color 0.15s ease, background-color 0.15s ease;
     }
 
     .google-btn:hover:not(:disabled) {
-      background: rgba(255, 255, 255, 0.1);
-      border-color: rgba(255, 255, 255, 0.15);
+      border-color: #333338;
+      background: #0f0f12;
     }
 
     .google-btn:disabled {
@@ -118,11 +116,12 @@ export function renderLoginPage(errorMessage?: string): string {
 </head>
 <body>
   <div class="login-card">
+    <div class="brand-mark"></div>
     <h1>UniFi Protect Assistant</h1>
     <p class="login-subtitle">Sign in with an authorized Google account to continue.</p>
     ${errorHtml}
     <button type="button" class="google-btn" id="google-signin">
-      <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+      <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true">
         <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
         <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
         <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>

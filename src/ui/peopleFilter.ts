@@ -74,22 +74,23 @@ export const peopleFilterStyles = `
     letter-spacing: 0.05em;
   }
   .people-filter-select {
-    background: var(--panel);
+    background: var(--surface);
     border: 1px solid var(--border);
     color: var(--text);
     padding: 0.5rem 0.75rem;
     border-radius: 8px;
-    font-family: var(--font-body);
+    font-family: var(--font);
     font-size: 0.9rem;
     font-weight: 500;
     cursor: pointer;
     min-width: 180px;
     transition: all 0.2s ease;
   }
-  .people-filter-select:hover,
+  .people-filter-select:hover {
+    border-color: var(--border-strong);
+  }
   .people-filter-select:focus {
-    border-color: var(--primary);
+    border-color: var(--accent);
     outline: none;
-    box-shadow: 0 0 8px var(--primary-glow);
   }
 `;
