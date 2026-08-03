@@ -29,7 +29,7 @@
     "typescript": "^5.4.5",
     "typescript-eslint": "^8.64.0",
     "vitest": "^1.6.0",
-    "wrangler": "^4.107.0"
+    "wrangler": "^4.118.0"
   },
   "dependencies": {
     "@honeybadger-io/cloudflare": "^0.3.3",
