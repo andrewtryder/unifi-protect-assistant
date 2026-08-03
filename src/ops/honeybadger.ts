@@ -13,28 +13,41 @@ function ensureConfigured(env: Env): boolean {
   return true;
 }
 
+export type ErrorContext = {
+  component?: string;
+  path?: string;
+  request_id?: string;
+  operation?: string;
+  error_code?: string;
+};
+
 /**
  * Report a server-side failure to Honeybadger without blocking the response.
- * No-ops when HONEYBADGER_API_KEY is unset.
+ * Context is passed per-notify (request-scoped) — never via global setContext —
+ * so concurrent requests cannot leak context into each other.
+ * Callers must not put biometric payloads, plates, secrets, or raw SQL in context.
  */
 export function reportError(
   env: Env,
   ctx: ExecutionContext,
   error: unknown,
-  context?: { component?: string; path?: string }
+  context?: ErrorContext
 ): void {
   if (!ensureConfigured(env)) return;
 
   const noticeable = error instanceof Error ? error : new Error(String(error));
-  if (context?.component || context?.path) {
-    Honeybadger.setContext({
-      ...(context.component ? { component: context.component } : {}),
-      ...(context.path ? { path: context.path } : {}),
-    });
-  }
+  // Strip potentially sensitive message content from notice metadata; keep error name/code only.
+  const safeContext: Record<string, string> = {};
+  if (context?.component) safeContext.component = context.component;
+  if (context?.path) safeContext.path = context.path;
+  if (context?.request_id) safeContext.request_id = context.request_id;
+  if (context?.operation) safeContext.operation = context.operation;
+  if (context?.error_code) safeContext.error_code = context.error_code;
 
   ctx.waitUntil(
-    Honeybadger.notifyAsync(noticeable).catch((notifyErr) => {
+    Honeybadger.notifyAsync(noticeable, {
+      context: safeContext,
+    }).catch((notifyErr) => {
       console.error("[honeybadger] notify failed:", notifyErr);
     })
   );

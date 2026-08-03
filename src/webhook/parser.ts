@@ -6,6 +6,18 @@ export interface ParsedWebhookEvents {
   vehicleEvents: VehicleEvent[];
 }
 
+export class InvalidTimestampError extends Error {
+  readonly code = "INVALID_TIMESTAMP";
+  constructor(message = "Invalid event timestamp") {
+    super(message);
+    this.name = "InvalidTimestampError";
+  }
+}
+
+/** Reasonable epoch ms bounds: allow historical fixtures down to ~1970, reject far-future */
+const MIN_REASONABLE_MS = 0;
+const MAX_REASONABLE_MS = Date.UTC(2100, 0, 1);
+
 /**
  * Normalizes seen timestamp to local date (YYYY-MM-DD) in the specified timezone
  */
@@ -41,7 +53,29 @@ function extractImageBase64(trigger: any, payload: any, alarm: any): string | un
 }
 
 /**
+ * Parse trigger timestamp. Rejects non-finite, Infinity, NaN, and unreasonable values.
+ * Accepts seconds (10-digit) by converting to ms.
+ */
+export function parseEventTimestamp(raw: unknown): number {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) {
+    throw new InvalidTimestampError();
+  }
+  let ms = raw;
+  // UniFi sometimes sends seconds
+  if (ms > 0 && ms < 1e12) {
+    ms = Math.trunc(ms * 1000);
+  } else {
+    ms = Math.trunc(ms);
+  }
+  if (ms < MIN_REASONABLE_MS || ms > MAX_REASONABLE_MS) {
+    throw new InvalidTimestampError();
+  }
+  return ms;
+}
+
+/**
  * Parses UniFi Protect payloads defensively into face and license-plate events.
+ * Vehicle events are only produced when ENABLE_VEHICLE_EVENTS=true.
  */
 export function parseWebhookPayload(
   payload: any,
@@ -49,8 +83,16 @@ export function parseWebhookPayload(
   env: Env
 ): ParsedWebhookEvents {
   const timezone = env.TIMEZONE || "America/New_York";
+  // Validate timezone early
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: timezone });
+  } catch {
+    throw new Error("INVALID_TIMEZONE");
+  }
+
   const faceEvents: FaceEvent[] = [];
   const vehicleEvents: VehicleEvent[] = [];
+  const enableVehicles = env.ENABLE_VEHICLE_EVENTS?.trim().toLowerCase() === "true";
 
   if (!payload || typeof payload !== "object") {
     return { faceEvents, vehicleEvents };
@@ -87,6 +129,7 @@ export function parseWebhookPayload(
     const isFace = triggerKey.startsWith("face_");
     const isPlate = triggerKey.startsWith("license_plate_");
     if (!isFace && !isPlate) continue;
+    if (isPlate && !enableVehicles) continue;
 
     const cameraId = String(trigger.device || "");
     if (watchCameras.length > 0 && !watchCameras.includes(cameraId.toLowerCase())) {
@@ -97,7 +140,7 @@ export function parseWebhookPayload(
     if (!eventId) continue;
     eventId = uniquifyTestEventId(eventId);
 
-    const seenAtMs = Number(trigger.timestamp) || Date.now();
+    const seenAtMs = parseEventTimestamp(trigger.timestamp);
     const localDate = getLocalDate(seenAtMs, timezone);
     const imageBase64 = extractImageBase64(trigger, payload, alarm);
 
@@ -114,13 +157,18 @@ export function parseWebhookPayload(
         trigger_key: triggerKey,
         camera_id: cameraId,
         alarm_name: alarmName,
-        raw_trigger_json: JSON.stringify(trigger),
+        // Store trigger without embedding plate into logs elsewhere; DB retains for product use.
+        raw_trigger_json: JSON.stringify({
+          ...trigger,
+          value: "[redacted]",
+          group: trigger.group ? { ...trigger.group, name: "[redacted]" } : undefined,
+          image: undefined,
+        }),
         image_base64: imageBase64,
       });
       continue;
     }
 
-    // Face events
     const personName = String(trigger.value || trigger.group?.name || "Unknown");
 
     let personId = "";

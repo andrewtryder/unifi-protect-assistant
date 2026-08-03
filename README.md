@@ -13,7 +13,9 @@ A lightweight, premium Cloudflare Workers app that ingests webhook notifications
 - **Person Filter Dropdown**: Calendar and Events Log views include a dropdown to filter by any detected person (or "All People").
 - **Reporting**: Materializes `presence_sessions` and `daily_person_reports` (first/last wall span + observed presence hours).
 - **Aesthetic UI**: A modern glassmorphism calendar and event log UI rendered server-side for rapid, responsive mobile and desktop viewing. Event thumbnails are shown when available.
-- **Data Retention Policy**: Automated cleanup purging raw payloads after 30 days, and normalized events/reports/sessions after 365 days.
+- **Data Retention Policy**: Scrubs raw payloads/images after ~30 days; deletes normalized events, reports, and sessions after ~365 days. Parent webhook rows can be removed while retained children keep `notification_id = NULL` (`ON DELETE SET NULL`).
+- **Vehicle events (experimental)**: License-plate ingestion is gated behind `ENABLE_VEHICLE_EVENTS=true` (default `false`). Storage/retention/diagnostics only — no dashboard surface yet. Plate values are never logged or sent to Honeybadger.
+- **Readiness**: Public `GET /ready` checks D1 connectivity and required schema without exposing counts or config.
 
 ---
 
@@ -111,6 +113,12 @@ Create a `.dev.vars` file in the root directory:
 
 ```env
 WEBHOOK_SECRET=your_dev_shared_webhook_secret
+# Local only — never enable in production. Allows POST /unifi without WEBHOOK_SECRET.
+# ALLOW_INSECURE_WEBHOOKS=true
+# Optional body size cap (bytes). Default 2097152 (2 MiB).
+# MAX_WEBHOOK_BODY_BYTES=2097152
+# Experimental: store license_plate_* triggers (default false).
+# ENABLE_VEHICLE_EVENTS=true
 # App signing secret (≥32 chars). Separate from the Infrastructure API key.
 BETTER_AUTH_SECRET=generate_a_long_random_secret_at_least_32_chars
 # From your Better Auth Infrastructure project (enables dash user mgmt / analytics)
@@ -122,6 +130,8 @@ GOOGLE_CLIENT_SECRET=your_google_oauth_client_secret
 ALLOWED_EMAILS=you@gmail.com,other@example.com
 BETTER_AUTH_URL=http://localhost:8787
 ```
+
+> **Warning:** `ALLOW_INSECURE_WEBHOOKS=true` disables webhook authentication. Use only on localhost. Production must set `WEBHOOK_SECRET` and leave insecure mode `false`.
 
 ### 3. Google OAuth redirect URIs
 
@@ -156,11 +166,30 @@ Set `TARGET_PERSON_NAMES` and/or `TARGET_PERSON_IDS` only if you want to restric
 
 Sightings are grouped into sessions when consecutive detections for the same person fall within `PRESENCE_GAP_MINUTES` (default 20). Larger gaps start a new session. Daily observed presence is the sum of session durations (rounded up to 15 minutes per session total for display hours). The calendar shows **observed** hours; tooltips still include the first–last wall-clock span for comparison.
 
-The **Today** page recomputes this live from `face_events` every request/poll. Historical months are materialized into `presence_sessions` when the calendar loads (`ensureReportsForMonth`) or via the nightly cron.
+The **Today** page recomputes this live from `face_events` every request/poll. Historical months use a freshness check (`materialization_state`: event count, max timestamp, materializer version) so already-fresh dates are not rewritten on every calendar GET. Cron still force-regenerates yesterday safely.
 
 ### Person profiles
 
 Each detected identity has a stable `person_key` (`id:…` when UniFi provides a face ID, otherwise `name:…`). Open **People** in the nav or visit `/people/<urlencoded-person_key>` (example: `/people/id%3Aabc123`). Profiles show lifetime first/last seen, observed visit totals from presence sessions, median typical arrival/departure (90 days), top cameras, a 12-month heatmap, and recent thumbnails.
+
+### Retention (raw vs normalized)
+
+| Data                                                       | Retention | Behavior                                           |
+| ---------------------------------------------------------- | --------- | -------------------------------------------------- |
+| `webhook_notifications.payload_json` / `image_base64`      | ~30 days  | Scrubbed to `{}` / `NULL`, then parent row deleted |
+| `face_events` / `vehicle_events` raw trigger JSON + images | ~30 days  | Scrubbed; normalized row retained                  |
+| `face_events` / `vehicle_events` rows                      | ~365 days | Deleted                                            |
+| `daily_person_reports` / `presence_sessions`               | ~365 days | Deleted                                            |
+| Child `notification_id` after parent delete                | —         | Set `NULL` via `ON DELETE SET NULL`                |
+
+### Webhook status / retry behavior
+
+- Missing `WEBHOOK_SECRET` (without insecure opt-in) → **503** (configuration error; fail closed).
+- Wrong secret → **401**.
+- Oversized body → **413** (Content-Length fast-path + streaming byte cap).
+- Invalid JSON / timestamps → **400** (generic message; no internals).
+- Transient D1 / write failures → **503** (retriable). Successful writes only return **200**.
+- Exact duplicate deliveries use a privacy-safe `delivery_key` (`ON CONFLICT DO NOTHING` on the parent); child rows dedupe with `ON CONFLICT(event_id) DO NOTHING`.
 
 ### Health diagnostics
 
@@ -168,12 +197,11 @@ Authenticated users can open **Health** (`/health`) for:
 
 - Last webhook received and last normalized `face_events` timestamp
 - Event/webhook volumes for the past hour and day
-- Today’s KV counters: rejected auth, invalid JSON (parsing failures), duplicates, zero-face webhooks, D1 write failures
-- Most recent cron report/cleanup timestamps (written by the scheduled worker)
+- Today’s D1 atomic counters: rejected auth/JSON/body, duplicates, zero-detection webhooks, D1 write failures
+- Most recent cron report/cleanup timestamps, cleanup summary counts, FK integrity check marker
 - D1 row counts (byte size remains in the Cloudflare dashboard)
-- Configuration warnings (missing secrets, empty allowlist, bad gap JSON)
-
-Reject/duplicate counters start at zero after deploy and accumulate in KV per local calendar day (~40 day TTL).
+- Configuration warnings (missing secrets, empty allowlist, stale cleanup, bad gap JSON)
+- Redacted error codes/operations only (no raw SQL on the health page)
 
 ---
 
@@ -200,12 +228,31 @@ Set `HONEYBADGER_API_KEY` from your [Honeybadger](https://www.honeybadger.io/) p
 
 `BETTER_AUTH_URL` defaults to `https://unifi-protect-assistant.mrcoffee.workers.dev` via `[vars]` in `wrangler.toml`.
 
-### Production Migrations
+### Production migrations (expand / migrate / contract)
 
-Apply the migrations to the live Cloudflare production D1 instance:
+1. **Backup**: Cloudflare snapshots D1 before remote migration apply; also export if you need a portable copy:
+   ```bash
+   npx wrangler d1 export unifi_protect_db --remote --output backup.sql
+   ```
+2. **Apply additive migrations** (this release includes `0008_retention_fk_ops.sql` table rebuilds using `PRAGMA defer_foreign_keys`):
+   ```bash
+   npm run db:migrate:prod
+   ```
+3. **Deploy Worker** that understands the new schema (`npm run deploy` or CI).
+4. **Rollback limitations**: Worker code can be rolled back with `wrangler rollback`. D1 migrations are forward-only — dropping rebuilt tables or reversing `ON DELETE SET NULL` requires a new forward migration and may lose data. Do not assume schema rollback.
+
+### Incident recovery (retention FK)
+
+If Honeybadger reports `FOREIGN KEY constraint failed` during cleanup before this migration:
 
 ```bash
+# Confirm migration 0008 is applied remotely
+npx wrangler d1 migrations list DB --remote
+# Apply if pending, then redeploy Worker
 npm run db:migrate:prod
+npm run deploy
+# Optional integrity check via Worker cron or local:
+# PRAGMA foreign_key_check;
 ```
 
 ### Manual Deploy
@@ -218,14 +265,15 @@ npm run deploy
 
 ## GitHub Actions Deployment (CI/CD)
 
-This repository includes a GitHub Action to automatically deploy on push to the `main` branch.
+Pull requests run the **quality** job only (install, typecheck, lint, format, unit + real SQLite migration/integration tests, fresh local D1 migrate, populated-schema upgrade). Production **deploy** runs only after quality succeeds on `main`.
 
-Add the following secrets to your GitHub Repository Settings (`Settings -> Secrets and variables -> Actions`). On every deploy to `main`, the workflow uploads the app secrets to the Cloudflare Worker (in addition to deploying `[vars]` from `wrangler.toml`):
+Add the following secrets to your GitHub Repository Settings (`Settings -> Secrets and variables -> Actions`):
 
 | GitHub secret           | Purpose                                       |
 | ----------------------- | --------------------------------------------- |
 | `CLOUDFLARE_API_TOKEN`  | Cloudflare API token (Workers, D1, KV)        |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID                         |
+| `WEBHOOK_SECRET`        | Shared secret for `POST /unifi`               |
 | `BETTER_AUTH_SECRET`    | App signing secret (≥32 chars)                |
 | `BETTER_AUTH_API_KEY`   | Better Auth Infrastructure API key (`ba_…`)   |
 | `GOOGLE_CLIENT_ID`      | Google OAuth client ID                        |
@@ -233,9 +281,9 @@ Add the following secrets to your GitHub Repository Settings (`Settings -> Secre
 | `ALLOWED_EMAILS`        | Comma-separated allowlisted Google emails     |
 | `HONEYBADGER_API_KEY`   | Honeybadger project API key (error reporting) |
 
-Optional: `WEBHOOK_SECRET` — set with `npx wrangler secret put WEBHOOK_SECRET` if you protect `POST /unifi` (not synced by CI unless you add it to the workflow and GitHub secrets).
+Smoke tests hit `/login`, `/ready`, auth-gated health, and `POST /unifi` without credentials (expects 401/503). They never insert biometric or plate data.
 
-You can also re-run **Deploy Worker** via `workflow_dispatch` to refresh Cloudflare secrets without a code change.
+You can also re-run the workflow via `workflow_dispatch` to refresh Cloudflare secrets without a code change.
 
 ---
 
@@ -256,6 +304,6 @@ In the UniFi Protect controller interface under the **Alarm Manager**:
 
 The dashboard and JSON APIs (`/`, `/calendar`, `/events`, `/api/*`) require **Google OAuth** via [better-auth](https://www.better-auth.com/). Only emails listed in `ALLOWED_EMAILS` can sign up or use an active session.
 
-`POST /unifi` remains separate: it uses the `X-Webhook-Secret` shared secret so UniFi Protect can post without a browser login.
+`POST /unifi` remains separate: it uses the `X-Webhook-Secret` shared secret so UniFi Protect can post without a browser login. Requests without a configured secret fail closed with 503 unless `ALLOW_INSECURE_WEBHOOKS=true` (local only).
 
-While raw UniFi Protect payloads are not displayed publicly, authenticated users can see dates, times, camera IDs, detection thumbnails, and names of individuals detected by the system. Keep OAuth credentials and `ALLOWED_EMAILS` up to date.
+While raw UniFi Protect payloads are not displayed publicly, authenticated users can see dates, times, camera IDs, detection thumbnails, and names of individuals detected by the system. Keep OAuth credentials and `ALLOWED_EMAILS` up to date. License-plate text is treated as sensitive personal data.

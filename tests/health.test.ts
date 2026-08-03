@@ -1,9 +1,8 @@
 import { describe, it, expect } from "vitest";
+import { ingestWebhook } from "../src/webhook/ingester.js";
 import { emptyCounters, mergeCounters, parseCountersJson } from "../src/ops/kvCounters.js";
 import { getConfigWarnings } from "../src/ops/configWarnings.js";
-import type { Env } from "../src/types.js";
-import { ingestWebhook } from "../src/webhook/ingester.js";
-import type { FaceEvent } from "../src/types.js";
+import type { Env, FaceEvent } from "../src/types.js";
 
 describe("ops counter helpers", () => {
   it("merges increments", () => {
@@ -97,34 +96,54 @@ describe("ingestWebhook stats", () => {
     };
   }
 
-  it("counts inserts and duplicates from batch meta.changes", async () => {
-    const batchMeta = [
-      { meta: { changes: 1 } }, // notification
-      { meta: { changes: 1 } }, // event insert
-      { meta: { changes: 0 } }, // duplicate ignore
-    ];
-    const env = {
-      DB: {
-        prepare() {
-          return {
-            bind() {
-              return {};
-            },
-          };
-        },
-        async batch() {
-          return batchMeta;
-        },
+  function mockDb(parentChanges: number, childChanges: number[]) {
+    return {
+      prepare(sql: string) {
+        return {
+          bind() {
+            return {
+              async run() {
+                if (sql.includes("webhook_notifications")) {
+                  return { meta: { changes: parentChanges }, success: true };
+                }
+                return { meta: { changes: 0 }, success: true };
+              },
+              async first() {
+                return parentChanges === 0 ? { id: "existing-notif" } : null;
+              },
+            };
+          },
+        };
       },
+      async batch() {
+        return childChanges.map((changes) => ({ meta: { changes } }));
+      },
+    } as unknown as D1Database;
+  }
+
+  it("counts inserts and duplicates from batch meta.changes", async () => {
+    const env = {
+      DB: mockDb(1, [1, 0]),
       KV: {} as KVNamespace,
     } as unknown as Env;
 
-    const result = await ingestWebhook(env, "notif", 1, "0.0.0.0", "e", "alarm", "{}", [
-      face("e1"),
-      face("e2"),
-    ]);
+    const result = await ingestWebhook(
+      env,
+      "notif",
+      1,
+      "0.0.0.0",
+      "e",
+      "alarm",
+      "{}",
+      [face("e1"), face("e2")],
+      undefined,
+      [],
+      "delivery-key-1"
+    );
 
     expect(result).toEqual({
+      notificationInserted: true,
+      notificationId: "notif",
       eventsAttempted: 2,
       eventsInserted: 1,
       duplicates: 1,
@@ -135,25 +154,8 @@ describe("ingestWebhook stats", () => {
   });
 
   it("counts vehicle inserts separately from faces", async () => {
-    const batchMeta = [
-      { meta: { changes: 1 } }, // notification
-      { meta: { changes: 1 } }, // face
-      { meta: { changes: 1 } }, // vehicle insert
-      { meta: { changes: 0 } }, // vehicle duplicate
-    ];
     const env = {
-      DB: {
-        prepare() {
-          return {
-            bind() {
-              return {};
-            },
-          };
-        },
-        async batch() {
-          return batchMeta;
-        },
-      },
+      DB: mockDb(1, [1, 1, 0]),
       KV: {} as KVNamespace,
     } as unknown as Env;
 
@@ -181,10 +183,13 @@ describe("ingestWebhook stats", () => {
       "{}",
       [face("e1")],
       undefined,
-      [vehicle, { ...vehicle, id: "v2", event_id: "ve2" }]
+      [vehicle, { ...vehicle, id: "v2", event_id: "ve2" }],
+      "delivery-key-2"
     );
 
     expect(result).toEqual({
+      notificationInserted: true,
+      notificationId: "notif",
       eventsAttempted: 1,
       eventsInserted: 1,
       duplicates: 0,

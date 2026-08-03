@@ -16,6 +16,12 @@ PRESENCE_GAP_MINUTES = "20"
 PRESENCE_GAP_BY_PERSON = ""
 PRESENCE_GAP_BY_CAMERA = ""
 
+# Vehicle/license-plate ingestion is experimental and off by default.
+ENABLE_VEHICLE_EVENTS = "false"
+# Never set ALLOW_INSECURE_WEBHOOKS=true in production.
+ALLOW_INSECURE_WEBHOOKS = "false"
+MAX_WEBHOOK_BODY_BYTES = "2097152"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "unifi_protect_db"

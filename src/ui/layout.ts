@@ -3,8 +3,10 @@ import { escapeHtml } from "./html.js";
 export function renderLayout(
   title: string,
   bodyContent: string,
-  options?: { selectedPerson?: string; calendarMonth?: string; eventsDate?: string }
+  options?: { selectedPerson?: string; calendarMonth?: string; eventsDate?: string; nonce?: string }
 ): string {
+  const nonceAttr = options?.nonce ? ` nonce="${options.nonce}"` : "";
+
   const personParam = options?.selectedPerson
     ? `?person=${encodeURIComponent(options.selectedPerson)}`
     : "";
@@ -17,16 +19,20 @@ export function renderLayout(
     ? `/events?date=${options.eventsDate}${options.selectedPerson ? `&person=${encodeURIComponent(options.selectedPerson)}` : ""}`
     : `/events${personParam}`;
 
+  const bodyWithNonce = options?.nonce
+    ? bodyContent
+        .replace(/<style>/g, `<style nonce="${options.nonce}">`)
+        .replace(/<script>/g, `<script nonce="${options.nonce}">`)
+        .replace(/<script type=/g, `<script nonce="${options.nonce}" type=`)
+    : bodyContent;
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title)} | UniFi Protect Assistant</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <style>
+  <style${nonceAttr}>
     /* ---------------------------------------------------
        Design tokens
        --------------------------------------------------- */
@@ -56,7 +62,7 @@ export function renderLayout(
       --radius-sm: 6px;
       --radius-md: 10px;
 
-      --font: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
     * {
@@ -276,14 +282,14 @@ export function renderLayout(
   </header>
 
   <main>
-    ${bodyContent}
+    ${bodyWithNonce}
   </main>
 
   <footer>
     <p>UniFi Protect Assistant &copy; 2026. Data local to America/New_York.</p>
   </footer>
 
-  <script>
+  <script${nonceAttr}>
     // Set active class on nav links
     const path = window.location.pathname;
     if (path.startsWith('/today')) {

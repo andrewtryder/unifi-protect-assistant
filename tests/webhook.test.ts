@@ -14,6 +14,7 @@ describe("Webhook Parser & Matching Tests", () => {
     DB: {} as any,
     KV: {} as any,
     TIMEZONE: "America/New_York",
+    ENABLE_VEHICLE_EVENTS: "true",
   };
 
   it("should extract fields correctly from a known face trigger", () => {
@@ -128,6 +129,36 @@ describe("Webhook Parser & Matching Tests", () => {
     expect(vehicleEvents).toHaveLength(1);
     expect(normalizePlateKey("AB-12")).toBe("plate:AB12");
     expect(vehicleEvents[0].plate_key).toBe("plate:AB12");
+  });
+
+  it("skips plate events when ENABLE_VEHICLE_EVENTS is not set", () => {
+    const envOff: Env = {
+      DB: {} as any,
+      KV: {} as any,
+      TIMEZONE: "America/New_York",
+    };
+    const { vehicleEvents } = parseWebhookPayload(samplePlate, "notif-plate", envOff);
+    expect(vehicleEvents).toHaveLength(0);
+  });
+
+  it("rejects non-finite timestamps", () => {
+    const bad = {
+      alarm: {
+        name: "x",
+        conditions: [],
+        triggers: [
+          {
+            device: "cam",
+            value: "A",
+            key: "face_known",
+            eventId: "e1",
+            timestamp: Number.POSITIVE_INFINITY,
+          },
+        ],
+      },
+      timestamp: 1,
+    };
+    expect(() => parseWebhookPayload(bad, "n", mockEnv)).toThrow();
   });
 });
 
