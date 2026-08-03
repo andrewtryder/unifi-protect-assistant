@@ -277,7 +277,7 @@ export function renderLayout(
       <a href="${calendarHref}" id="nav-calendar">Calendar</a>
       <a href="${eventsHref}" id="nav-events">Events Log</a>
       <a href="/health" id="nav-health">Health</a>
-      <button type="button" class="sign-out" id="sign-out">Sign out</button>
+      <a href="/cdn-cgi/access/logout" class="sign-out" id="sign-out">Sign out</a>
     </nav>
   </header>
 
@@ -304,15 +304,6 @@ export function renderLayout(
       document.getElementById('nav-calendar').classList.add('active');
     }
 
-    document.getElementById('sign-out').addEventListener('click', async () => {
-      await fetch('/api/auth/sign-out', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: '{}'
-      });
-      window.location.href = '/login';
-    });
   </script>
 </body>
 </html>`;

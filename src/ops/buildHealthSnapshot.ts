@@ -4,6 +4,7 @@ import { getHealthDbFacts } from "../db/queries.js";
 import { getTodayCounters, readOpsMarkers } from "./kvCounters.js";
 import { getConfigWarnings } from "./configWarnings.js";
 import { CLEANUP_STALE_MS, WEBHOOK_STALE_MS } from "./constants.js";
+import { accessHealthSummary } from "../config.js";
 
 export async function buildHealthSnapshot(
   env: Env,
@@ -30,6 +31,11 @@ export async function buildHealthSnapshot(
       "Retention cleanup has not succeeded within the expected interval (~36h)."
     );
   }
+
+  const access = accessHealthSummary(env);
+  const lastJwtFailure = await env.KV.get("ops:last_access_jwt_failure_class").catch(
+    () => null as string | null
+  );
 
   return {
     generated_at_ms: nowMs,
@@ -66,5 +72,10 @@ export async function buildHealthSnapshot(
       : null,
     db_usage: facts.db_usage,
     config_warnings,
+    access: {
+      configured: access.configured,
+      allowlist_count: access.allowlist_count,
+      last_jwt_failure_class: lastJwtFailure,
+    },
   };
 }

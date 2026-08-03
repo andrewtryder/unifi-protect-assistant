@@ -1,10 +1,10 @@
 import type { Env } from "./types.js";
-import { parseAllowedEmails } from "./auth-allowlist.js";
+import { AllowedEmailsError, parseAllowedEmailsStrict } from "./auth/allowedEmails.js";
+import { loadAccessConfig, AccessAuthError, normalizeTeamDomain } from "./auth/cloudflareAccess.js";
 
 export const DEFAULT_TIMEZONE = "America/New_York";
 export const DEFAULT_PRESENCE_GAP_MINUTES = 20;
-export const DEFAULT_MAX_WEBHOOK_BODY_BYTES = 2 * 1024 * 1024; // 2 MiB
-export const MIN_BETTER_AUTH_SECRET_LENGTH = 32;
+export const DEFAULT_MAX_WEBHOOK_BODY_BYTES = 2 * 1024 * 1024;
 export const MAX_REASONABLE_BODY_BYTES = 25 * 1024 * 1024;
 export const MIN_REASONABLE_BODY_BYTES = 64;
 export const MAX_GAP_MINUTES = 24 * 60;
@@ -15,12 +15,11 @@ export interface ParsedAppConfig {
   allowInsecureWebhooks: boolean;
   maxWebhookBodyBytes: number;
   enableVehicleEvents: boolean;
-  betterAuthUrl: string | null;
-  betterAuthSecret: string | null;
-  betterAuthApiKey: string | null;
-  googleClientId: string | null;
-  googleClientSecret: string | null;
-  allowedEmails: Set<string>;
+  allowLocalAuthBypass: boolean;
+  accessTeamDomain: string | null;
+  accessAud: string | null;
+  allowedEmails: string[];
+  allowlistDuplicatesFound: boolean;
   honeybadgerApiKey: string | null;
   presenceGapMinutes: number;
   presenceGapByPerson: Record<string, number>;
@@ -28,7 +27,6 @@ export interface ParsedAppConfig {
   targetPersonNames: string[];
   targetPersonIds: string[];
   watchCameraIds: string[];
-  isLocalDev: boolean;
 }
 
 export class ConfigValidationError extends Error {
@@ -91,21 +89,6 @@ function parseCsvLower(raw: string | undefined): string[] {
     .filter(Boolean);
 }
 
-function parseAbsoluteUrl(raw: string | undefined, label: string, errors: string[]): string | null {
-  if (!raw?.trim()) return null;
-  try {
-    const url = new URL(raw.trim());
-    if (url.protocol !== "http:" && url.protocol !== "https:") {
-      errors.push(`${label} must be an http(s) URL.`);
-      return null;
-    }
-    return url.toString().replace(/\/$/, "");
-  } catch {
-    errors.push(`${label} is not a valid absolute URL.`);
-    return null;
-  }
-}
-
 /**
  * Parse and validate Worker env into a typed config.
  * Fail-closed for settings required for secure operation unless explicitly opted out.
@@ -139,35 +122,35 @@ export function parseAppConfig(env: Env, options?: { requireSecure?: boolean }):
     }
   }
 
-  const betterAuthUrl = parseAbsoluteUrl(env.BETTER_AUTH_URL, "BETTER_AUTH_URL", errors);
-  const isLocalDev =
-    !!betterAuthUrl &&
-    (betterAuthUrl.startsWith("http://localhost") || betterAuthUrl.startsWith("http://127.0.0.1"));
-
-  if (betterAuthUrl && !isLocalDev && !betterAuthUrl.startsWith("https://")) {
-    errors.push("BETTER_AUTH_URL must use HTTPS outside local development.");
+  let allowedEmails: string[] = [];
+  let allowlistDuplicatesFound = false;
+  try {
+    const parsed = parseAllowedEmailsStrict(env.ALLOWED_EMAILS);
+    allowedEmails = parsed.emails;
+    allowlistDuplicatesFound = parsed.duplicatesFound;
+  } catch (err) {
+    if (err instanceof AllowedEmailsError) {
+      errors.push(err.message);
+    } else {
+      errors.push("ALLOWED_EMAILS is invalid.");
+    }
   }
 
-  const betterAuthSecret = env.BETTER_AUTH_SECRET?.trim() || null;
-  if (
-    requireSecure &&
-    (!betterAuthSecret || betterAuthSecret.length < MIN_BETTER_AUTH_SECRET_LENGTH)
-  ) {
-    errors.push(
-      `BETTER_AUTH_SECRET must be set and at least ${MIN_BETTER_AUTH_SECRET_LENGTH} characters.`
-    );
+  let accessTeamDomain: string | null = null;
+  try {
+    accessTeamDomain = normalizeTeamDomain(env.CF_ACCESS_TEAM_DOMAIN);
+  } catch (err) {
+    if (requireSecure) {
+      errors.push(err instanceof Error ? err.message : "CF_ACCESS_TEAM_DOMAIN is invalid.");
+    }
   }
 
-  const googleClientId = env.GOOGLE_CLIENT_ID?.trim() || null;
-  const googleClientSecret = env.GOOGLE_CLIENT_SECRET?.trim() || null;
-  if ((googleClientId && !googleClientSecret) || (!googleClientId && googleClientSecret)) {
-    errors.push("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set together.");
+  const accessAud = env.CF_ACCESS_AUD?.trim() || null;
+  if (requireSecure && !accessAud) {
+    errors.push("CF_ACCESS_AUD is required.");
   }
 
-  const allowedEmails = parseAllowedEmails(env.ALLOWED_EMAILS);
-  if (requireSecure && !isLocalDev && allowedEmails.size === 0) {
-    errors.push("ALLOWED_EMAILS must be non-empty in production.");
-  }
+  const allowLocalAuthBypass = env.ALLOW_LOCAL_AUTH_BYPASS?.trim().toLowerCase() === "true";
 
   let presenceGapMinutes = DEFAULT_PRESENCE_GAP_MINUTES;
   if (env.PRESENCE_GAP_MINUTES?.trim()) {
@@ -200,12 +183,11 @@ export function parseAppConfig(env: Env, options?: { requireSecure?: boolean }):
     allowInsecureWebhooks,
     maxWebhookBodyBytes,
     enableVehicleEvents: env.ENABLE_VEHICLE_EVENTS?.trim().toLowerCase() === "true",
-    betterAuthUrl,
-    betterAuthSecret,
-    betterAuthApiKey: env.BETTER_AUTH_API_KEY?.trim() || null,
-    googleClientId,
-    googleClientSecret,
+    allowLocalAuthBypass,
+    accessTeamDomain,
+    accessAud,
     allowedEmails,
+    allowlistDuplicatesFound,
     honeybadgerApiKey: env.HONEYBADGER_API_KEY?.trim() || null,
     presenceGapMinutes,
     presenceGapByPerson,
@@ -213,7 +195,6 @@ export function parseAppConfig(env: Env, options?: { requireSecure?: boolean }):
     targetPersonNames: parseCsvLower(env.TARGET_PERSON_NAMES),
     targetPersonIds: parseCsvLower(env.TARGET_PERSON_IDS),
     watchCameraIds: parseCsvLower(env.WATCH_CAMERA_IDS),
-    isLocalDev,
   };
 }
 
@@ -230,15 +211,17 @@ export function collectConfigWarnings(env: Env): string[] {
     }
   }
 
-  if (!env.BETTER_AUTH_URL?.trim()) {
-    warnings.push("BETTER_AUTH_URL missing — auth base URL cannot be resolved.");
+  try {
+    const parsed = parseAllowedEmailsStrict(env.ALLOWED_EMAILS);
+    if (parsed.duplicatesFound) {
+      warnings.push(
+        "ALLOWED_EMAILS contains duplicate entries after normalization; clean up advised."
+      );
+    }
+  } catch {
+    // already reported via parseAppConfig
   }
 
-  if (!env.BETTER_AUTH_API_KEY?.trim()) {
-    warnings.push(
-      "BETTER_AUTH_API_KEY missing — Better Auth Infrastructure (dash) will not connect."
-    );
-  }
   if (!env.HONEYBADGER_API_KEY?.trim()) {
     warnings.push(
       "HONEYBADGER_API_KEY missing — server errors will not be reported to Honeybadger."
@@ -249,6 +232,36 @@ export function collectConfigWarnings(env: Env): string[] {
       "ALLOW_INSECURE_WEBHOOKS=true — webhook authentication is disabled (local insecure mode)."
     );
   }
+  if (env.ALLOW_LOCAL_AUTH_BYPASS?.trim().toLowerCase() === "true") {
+    warnings.push(
+      "ALLOW_LOCAL_AUTH_BYPASS=true — dashboard Access JWT checks are bypassed on localhost only."
+    );
+  }
+
+  try {
+    loadAccessConfig(env);
+  } catch (err) {
+    if (err instanceof AccessAuthError) {
+      warnings.push(`Cloudflare Access configuration: ${err.failureClass}`);
+    }
+  }
 
   return [...new Set(warnings)];
+}
+
+export function accessHealthSummary(env: Env): {
+  configured: boolean;
+  allowlist_count: number;
+} {
+  try {
+    const cfg = loadAccessConfig(env);
+    return { configured: true, allowlist_count: cfg.allowedEmails.length };
+  } catch {
+    try {
+      const { count } = parseAllowedEmailsStrict(env.ALLOWED_EMAILS);
+      return { configured: false, allowlist_count: count };
+    } catch {
+      return { configured: false, allowlist_count: 0 };
+    }
+  }
 }
