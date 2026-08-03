@@ -223,6 +223,7 @@ export async function getSessionsForDate(
 
 /**
  * Replace all presence_sessions for a local_date with the provided rows.
+ * Prefer replaceDerivedForDate for atomic session+report updates.
  */
 export async function replaceSessionsForDate(
   env: Env,
@@ -266,11 +267,163 @@ export async function replaceSessionsForDate(
 }
 
 /**
- * Inserts or replaces a daily report record
+ * Atomically replace derived sessions + daily reports for one local date,
+ * and upsert materialization_state. Leaves both tables empty when inputs are empty.
+ */
+export async function replaceDerivedForDate(
+  env: Env,
+  localDate: string,
+  sessions: PresenceSession[],
+  reports: DailyReport[],
+  state: {
+    source_event_count: number;
+    max_seen_at_ms: number;
+    materializer_version: number;
+    generated_at_ms: number;
+  }
+): Promise<void> {
+  const stmts = [
+    env.DB.prepare(`DELETE FROM presence_sessions WHERE local_date = ?`).bind(localDate),
+    env.DB.prepare(`DELETE FROM daily_person_reports WHERE local_date = ?`).bind(localDate),
+  ];
+
+  for (const s of sessions) {
+    stmts.push(
+      env.DB.prepare(
+        `
+        INSERT INTO presence_sessions (
+          id, local_date, person_key, person_name,
+          started_at_ms, ended_at_ms, duration_seconds, rounded_duration_minutes,
+          sighting_count, first_event_id, last_event_id,
+          first_camera_id, last_camera_id, is_open, generated_at_ms
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `
+      ).bind(
+        s.id,
+        s.local_date,
+        s.person_key,
+        s.person_name,
+        s.started_at_ms,
+        s.ended_at_ms,
+        s.duration_seconds,
+        s.rounded_duration_minutes,
+        s.sighting_count,
+        s.first_event_id,
+        s.last_event_id,
+        s.first_camera_id,
+        s.last_camera_id,
+        s.is_open,
+        s.generated_at_ms
+      )
+    );
+  }
+
+  for (const report of reports) {
+    stmts.push(
+      env.DB.prepare(
+        `
+        INSERT INTO daily_person_reports (
+          local_date, person_key, person_name, first_seen_ms, last_seen_ms,
+          raw_span_seconds, rounded_span_minutes, rounded_span_hours,
+          first_event_id, last_event_id, first_camera_id, last_camera_id,
+          seen_count, generated_at_ms,
+          observed_span_seconds, observed_rounded_minutes, observed_rounded_hours,
+          session_count
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `
+      ).bind(
+        report.local_date,
+        report.person_key,
+        report.person_name,
+        report.first_seen_ms,
+        report.last_seen_ms,
+        report.raw_span_seconds,
+        report.rounded_span_minutes,
+        report.rounded_span_hours,
+        report.first_event_id,
+        report.last_event_id,
+        report.first_camera_id,
+        report.last_camera_id,
+        report.seen_count,
+        report.generated_at_ms,
+        report.observed_span_seconds ?? null,
+        report.observed_rounded_minutes ?? null,
+        report.observed_rounded_hours ?? null,
+        report.session_count ?? null
+      )
+    );
+  }
+
+  stmts.push(
+    env.DB.prepare(
+      `
+      INSERT INTO materialization_state (
+        local_date, source_event_count, max_seen_at_ms, materializer_version, generated_at_ms
+      ) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(local_date) DO UPDATE SET
+        source_event_count = excluded.source_event_count,
+        max_seen_at_ms = excluded.max_seen_at_ms,
+        materializer_version = excluded.materializer_version,
+        generated_at_ms = excluded.generated_at_ms
+    `
+    ).bind(
+      localDate,
+      state.source_event_count,
+      state.max_seen_at_ms,
+      state.materializer_version,
+      state.generated_at_ms
+    )
+  );
+
+  await env.DB.batch(stmts);
+}
+
+export async function getMaterializationState(
+  env: Env,
+  localDate: string
+): Promise<{
+  local_date: string;
+  source_event_count: number;
+  max_seen_at_ms: number;
+  materializer_version: number;
+  generated_at_ms: number;
+} | null> {
+  return (
+    (await env.DB.prepare(
+      `
+      SELECT local_date, source_event_count, max_seen_at_ms, materializer_version, generated_at_ms
+      FROM materialization_state
+      WHERE local_date = ?
+    `
+    )
+      .bind(localDate)
+      .first()) ?? null
+  );
+}
+
+export async function getFaceEventFreshness(
+  env: Env,
+  localDate: string
+): Promise<{ count: number; max_seen_at_ms: number }> {
+  const row = await env.DB.prepare(
+    `
+    SELECT COUNT(*) AS count, COALESCE(MAX(seen_at_ms), 0) AS max_seen_at_ms
+    FROM face_events
+    WHERE local_date = ?
+  `
+  )
+    .bind(localDate)
+    .first<{ count: number; max_seen_at_ms: number }>();
+  return { count: row?.count ?? 0, max_seen_at_ms: row?.max_seen_at_ms ?? 0 };
+}
+
+/**
+ * Inserts or updates a daily report record (ON CONFLICT DO UPDATE).
+ * Prefer replaceDerivedForDate for full-date atomic replacement.
  */
 export async function upsertDailyReport(env: Env, report: DailyReport): Promise<void> {
   const query = `
-    INSERT OR REPLACE INTO daily_person_reports (
+    INSERT INTO daily_person_reports (
       local_date, person_key, person_name, first_seen_ms, last_seen_ms,
       raw_span_seconds, rounded_span_minutes, rounded_span_hours,
       first_event_id, last_event_id, first_camera_id, last_camera_id,
@@ -278,6 +431,23 @@ export async function upsertDailyReport(env: Env, report: DailyReport): Promise<
       observed_span_seconds, observed_rounded_minutes, observed_rounded_hours,
       session_count
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(local_date, person_key) DO UPDATE SET
+      person_name = excluded.person_name,
+      first_seen_ms = excluded.first_seen_ms,
+      last_seen_ms = excluded.last_seen_ms,
+      raw_span_seconds = excluded.raw_span_seconds,
+      rounded_span_minutes = excluded.rounded_span_minutes,
+      rounded_span_hours = excluded.rounded_span_hours,
+      first_event_id = excluded.first_event_id,
+      last_event_id = excluded.last_event_id,
+      first_camera_id = excluded.first_camera_id,
+      last_camera_id = excluded.last_camera_id,
+      seen_count = excluded.seen_count,
+      generated_at_ms = excluded.generated_at_ms,
+      observed_span_seconds = excluded.observed_span_seconds,
+      observed_rounded_minutes = excluded.observed_rounded_minutes,
+      observed_rounded_hours = excluded.observed_rounded_hours,
+      session_count = excluded.session_count
   `;
   await env.DB.prepare(query)
     .bind(

@@ -1,7 +1,6 @@
-import { Env, UnifiWebhookPayload } from "./types.js";
-import { parseWebhookPayload, getLocalDate } from "./webhook/parser.js";
-import { normalizeJpegBase64 } from "./webhook/image.js";
-import { ingestWebhook } from "./webhook/ingester.js";
+import { Env } from "./types.js";
+import { handleUnifiWebhook } from "./webhook/handler.js";
+import { getLocalDate } from "./webhook/parser.js";
 import {
   getReportsForMonth,
   getEventsForDate,
@@ -14,29 +13,39 @@ import { ensureReportsForMonth, generateDailyReport } from "./reporting/generato
 import { runRetentionCleanup } from "./reporting/cleanup.js";
 import { renderCalendar } from "./ui/calendar.js";
 import { renderEventsLog } from "./ui/events.js";
-import { renderLoginPage } from "./ui/login.js";
 import { renderTodayDashboard } from "./ui/today.js";
 import { renderPeopleDirectory, renderPersonProfile, renderPersonNotFound } from "./ui/people.js";
 import { PersonSummary } from "./types.js";
-import { createAuth } from "./auth.js";
-import { isEmailAllowed } from "./auth-allowlist.js";
 import { buildTodaySnapshot } from "./reporting/sessions.js";
 import {
-  incrementCounter,
+  classifyDbError,
   setCleanupOk,
   setCronError,
   setCronReportOk,
-  setD1Error,
+  setFkCheckOk,
 } from "./ops/kvCounters.js";
 import { buildHealthSnapshot } from "./ops/buildHealthSnapshot.js";
 import { renderHealthPage } from "./ui/health.js";
 import { withHoneybadger } from "@honeybadger-io/cloudflare";
 import { reportError } from "./ops/honeybadger.js";
+import { DEFAULT_TIMEZONE } from "./config.js";
+import { resolveRequestId, withRequestIdHeader } from "./http/requestId.js";
+import {
+  genericErrorResponse,
+  htmlResponse,
+  jsonResponse,
+  methodNotAllowed,
+  newRequestNonce,
+  textResponse,
+} from "./http/responses.js";
+import {
+  isValidLocalDateString,
+  isValidMonthString,
+  safeDecodeURIComponent,
+} from "./http/dates.js";
+import { handleReady } from "./http/ready.js";
+import { requireAccessAuth } from "./auth/gate.js";
 
-/**
- * Keeps a selected person visible in the dropdown when day/month navigation
- * lands on a range where they have no events.
- */
 function withSelectedPerson(people: PersonSummary[], selectedPerson?: string): PersonSummary[] {
   if (!selectedPerson) return people;
   const alreadyListed = people.some(
@@ -48,53 +57,9 @@ function withSelectedPerson(people: PersonSummary[], selectedPerson?: string): P
   );
 }
 
-type AuthGate = { ok: true } | { ok: false; response: Response };
-
-async function requireDashboardAuth(
-  request: Request,
-  env: Env,
-  mode: "html" | "json"
-): Promise<AuthGate> {
-  const auth = createAuth(env);
-  const session = await auth.api.getSession({ headers: request.headers });
-
-  if (!session) {
-    if (mode === "json") {
-      return {
-        ok: false,
-        response: new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401,
-          headers: { "Content-Type": "application/json" },
-        }),
-      };
-    }
-    const loginUrl = new URL("/login", request.url);
-    return {
-      ok: false,
-      response: Response.redirect(loginUrl.toString(), 302),
-    };
-  }
-
-  if (!isEmailAllowed(session.user.email, env)) {
-    if (mode === "json") {
-      return {
-        ok: false,
-        response: new Response(JSON.stringify({ error: "Forbidden" }), {
-          status: 403,
-          headers: { "Content-Type": "application/json" },
-        }),
-      };
-    }
-    return {
-      ok: false,
-      response: new Response(renderLoginPage("Your email is not authorized to access this app."), {
-        status: 403,
-        headers: { "Content-Type": "text/html" },
-      }),
-    };
-  }
-
-  return { ok: true };
+function requireGet(request: Request): Response | null {
+  if (request.method === "GET" || request.method === "HEAD") return null;
+  return methodNotAllowed(["GET", "HEAD"]);
 }
 
 export default withHoneybadger(
@@ -105,252 +70,145 @@ export default withHoneybadger(
   {
     async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
       const url = new URL(request.url);
-      const timezone = env.TIMEZONE || "America/New_York";
+      const requestId = resolveRequestId(request);
+      const nonce = newRequestNonce();
+      const timezone = env.TIMEZONE || DEFAULT_TIMEZONE;
 
-      // better-auth endpoints (Google OAuth, session, sign-out)
-      if (url.pathname.startsWith("/api/auth")) {
-        try {
-          const auth = createAuth(env);
-          return await auth.handler(request);
-        } catch (err: unknown) {
-          const message = err instanceof Error ? err.message : String(err);
-          const stack = err instanceof Error ? err.stack : undefined;
-          console.error("[auth] handler error:", message, stack);
-          reportError(env, ctx, err, { component: "auth", path: url.pathname });
-          return new Response(JSON.stringify({ error: "Internal Server Error", message }), {
-            status: 500,
-            headers: { "Content-Type": "application/json" },
-          });
+      if (url.pathname === "/ready") {
+        if (request.method !== "GET" && request.method !== "HEAD") {
+          return methodNotAllowed(["GET", "HEAD"]);
         }
+        const res = await handleReady(env);
+        const headers = withRequestIdHeader(res.headers, requestId);
+        return new Response(res.body, { status: res.status, headers });
       }
 
-      // 1. POST /unifi - Webhook ingestion (shared secret only; not Google auth)
       if (url.pathname === "/unifi") {
-        if (request.method !== "POST") {
-          return new Response("Method Not Allowed", { status: 405 });
-        }
-
-        // Authentication
-        const secretHeader = request.headers.get("X-Webhook-Secret");
-        const expectedSecret = env.WEBHOOK_SECRET;
-        if (expectedSecret && secretHeader !== expectedSecret) {
-          ctx.waitUntil(incrementCounter(env, "rejected_auth").catch(() => undefined));
-          return new Response("Unauthorized", { status: 401 });
-        }
-
-        try {
-          const receivedAtMs = Date.now();
-          const clientIp = request.headers.get("CF-Connecting-IP") || "0.0.0.0";
-          const rawBody = await request.text();
-
-          let payload: UnifiWebhookPayload;
-          try {
-            payload = JSON.parse(rawBody);
-          } catch {
-            ctx.waitUntil(incrementCounter(env, "rejected_json").catch(() => undefined));
-            return new Response(JSON.stringify({ error: "Invalid JSON" }), {
-              status: 400,
-              headers: { "Content-Type": "application/json" },
-            });
-          }
-
-          const notificationId = crypto.randomUUID();
-          const { faceEvents, vehicleEvents } = parseWebhookPayload(payload, notificationId, env);
-
-          // No face or plate detections extracted from this payload
-          if (faceEvents.length === 0 && vehicleEvents.length === 0) {
-            ctx.waitUntil(incrementCounter(env, "zero_face_webhooks").catch(() => undefined));
-          }
-
-          // Fetch basic info from payload for logging/notification storage
-          const eventId = payload.alarm?.triggers?.[0]?.eventId || "N/A";
-          const alarmName = payload.alarm?.name || "N/A";
-
-          const imageBase64 = normalizeJpegBase64(
-            (payload as any).image || payload.alarm?.image || ""
-          );
-
-          const ingestResult = await ingestWebhook(
-            env,
-            notificationId,
-            receivedAtMs,
-            clientIp,
-            eventId,
-            alarmName,
-            rawBody,
-            faceEvents,
-            imageBase64,
-            vehicleEvents
-          );
-
-          ctx.waitUntil(
-            (async () => {
-              await incrementCounter(env, "ingested_webhooks");
-              if (ingestResult.eventsAttempted > 0) {
-                await incrementCounter(env, "events_attempted", ingestResult.eventsAttempted);
-              }
-              if (ingestResult.eventsInserted > 0) {
-                await incrementCounter(env, "events_inserted", ingestResult.eventsInserted);
-              }
-              if (ingestResult.duplicates > 0) {
-                await incrementCounter(env, "duplicates", ingestResult.duplicates);
-              }
-              if (ingestResult.vehiclesAttempted > 0) {
-                await incrementCounter(env, "vehicles_attempted", ingestResult.vehiclesAttempted);
-              }
-              if (ingestResult.vehiclesInserted > 0) {
-                await incrementCounter(env, "vehicles_inserted", ingestResult.vehiclesInserted);
-              }
-              if (ingestResult.vehicleDuplicates > 0) {
-                await incrementCounter(env, "vehicle_duplicates", ingestResult.vehicleDuplicates);
-              }
-            })().catch(() => undefined)
-          );
-
-          return new Response(
-            JSON.stringify({
-              success: true,
-              events_ingested: ingestResult.eventsInserted,
-              events_attempted: ingestResult.eventsAttempted,
-              duplicates: ingestResult.duplicates,
-              vehicles_ingested: ingestResult.vehiclesInserted,
-              vehicles_attempted: ingestResult.vehiclesAttempted,
-              vehicle_duplicates: ingestResult.vehicleDuplicates,
-            }),
-            {
-              status: 200,
-              headers: { "Content-Type": "application/json" },
-            }
-          );
-        } catch (err: any) {
-          console.error("Webhook processing error:", err);
-          const message = err instanceof Error ? err.message : String(err);
-          reportError(env, ctx, err, { component: "webhook", path: "/unifi" });
-          ctx.waitUntil(
-            (async () => {
-              await incrementCounter(env, "d1_failures");
-              await setD1Error(env, message);
-            })().catch(() => undefined)
-          );
-          return new Response(JSON.stringify({ error: "Internal Server Error", message }), {
-            status: 200, // Do not crash/return error code to webhook provider
-            headers: { "Content-Type": "application/json" },
-          });
-        }
+        return handleUnifiWebhook(request, env, ctx, requestId);
       }
 
-      // Login page (public)
-      if (url.pathname === "/login") {
-        const error = url.searchParams.get("error") || undefined;
-        return new Response(renderLoginPage(error || undefined), {
-          headers: { "Content-Type": "text/html" },
-        });
-      }
-
-      // 2. GET / - Redirect to /today (auth required)
       if (url.pathname === "/") {
-        const gate = await requireDashboardAuth(request, env, "html");
+        const notGet = requireGet(request);
+        if (notGet) return notGet;
+        const gate = await requireAccessAuth(request, env, "html", nonce, requestId);
         if (!gate.ok) return gate.response;
         return Response.redirect(`${url.origin}/today`, 302);
       }
 
-      // Today live dashboard
       if (url.pathname === "/today") {
-        const gate = await requireDashboardAuth(request, env, "html");
+        const notGet = requireGet(request);
+        if (notGet) return notGet;
+        const gate = await requireAccessAuth(request, env, "html", nonce, requestId);
         if (!gate.ok) return gate.response;
         const snapshot = await buildTodaySnapshot(env);
-        return new Response(renderTodayDashboard(snapshot), {
-          headers: { "Content-Type": "text/html" },
+        return htmlResponse(renderTodayDashboard(snapshot, nonce), {
+          nonce,
+          extra: withRequestIdHeader(undefined, requestId),
         });
       }
 
       if (url.pathname === "/api/today") {
-        const gate = await requireDashboardAuth(request, env, "json");
+        const notGet = requireGet(request);
+        if (notGet) return notGet;
+        const gate = await requireAccessAuth(request, env, "json", nonce, requestId);
         if (!gate.ok) return gate.response;
         const snapshot = await buildTodaySnapshot(env);
-        return new Response(JSON.stringify(snapshot), {
-          headers: {
-            "Content-Type": "application/json",
-            "Cache-Control": "no-store",
-          },
-        });
+        return jsonResponse(snapshot, { extra: withRequestIdHeader(undefined, requestId) });
       }
 
-      // Health / diagnostics
       if (url.pathname === "/health") {
-        const gate = await requireDashboardAuth(request, env, "html");
+        const notGet = requireGet(request);
+        if (notGet) return notGet;
+        const gate = await requireAccessAuth(request, env, "html", nonce, requestId);
         if (!gate.ok) return gate.response;
         const snapshot = await buildHealthSnapshot(env);
-        return new Response(renderHealthPage(snapshot), {
-          headers: { "Content-Type": "text/html" },
+        return htmlResponse(renderHealthPage(snapshot, nonce), {
+          nonce,
+          extra: withRequestIdHeader(undefined, requestId),
         });
       }
 
       if (url.pathname === "/api/health") {
-        const gate = await requireDashboardAuth(request, env, "json");
+        const notGet = requireGet(request);
+        if (notGet) return notGet;
+        const gate = await requireAccessAuth(request, env, "json", nonce, requestId);
         if (!gate.ok) return gate.response;
         const snapshot = await buildHealthSnapshot(env);
-        return new Response(JSON.stringify(snapshot), {
-          headers: {
-            "Content-Type": "application/json",
-            "Cache-Control": "no-store",
-          },
-        });
+        return jsonResponse(snapshot, { extra: withRequestIdHeader(undefined, requestId) });
       }
 
-      // People directory
       if (url.pathname === "/people") {
-        const gate = await requireDashboardAuth(request, env, "html");
+        const notGet = requireGet(request);
+        if (notGet) return notGet;
+        const gate = await requireAccessAuth(request, env, "html", nonce, requestId);
         if (!gate.ok) return gate.response;
         const people = await getPeopleDirectory(env);
-        return new Response(renderPeopleDirectory(people), {
-          headers: { "Content-Type": "text/html" },
+        return htmlResponse(renderPeopleDirectory(people, nonce), {
+          nonce,
+          extra: withRequestIdHeader(undefined, requestId),
         });
       }
 
-      // Person profile: /people/:personKey
       if (url.pathname.startsWith("/people/")) {
-        const gate = await requireDashboardAuth(request, env, "html");
+        const notGet = requireGet(request);
+        if (notGet) return notGet;
+        const gate = await requireAccessAuth(request, env, "html", nonce, requestId);
         if (!gate.ok) return gate.response;
-        const personKey = decodeURIComponent(url.pathname.slice("/people/".length));
+        const personKey = safeDecodeURIComponent(url.pathname.slice("/people/".length));
+        if (personKey === null) {
+          return genericErrorResponse(
+            400,
+            "Bad Request",
+            withRequestIdHeader(undefined, requestId)
+          );
+        }
         if (!personKey) {
           return Response.redirect(`${url.origin}/people`, 302);
         }
         const profile = await getPersonProfile(env, personKey);
         if (!profile) {
-          return new Response(renderPersonNotFound(personKey), {
+          return htmlResponse(renderPersonNotFound(personKey, nonce), {
             status: 404,
-            headers: { "Content-Type": "text/html" },
+            nonce,
+            extra: withRequestIdHeader(undefined, requestId),
           });
         }
-        return new Response(renderPersonProfile(profile), {
-          headers: { "Content-Type": "text/html" },
+        return htmlResponse(renderPersonProfile(profile, nonce), {
+          nonce,
+          extra: withRequestIdHeader(undefined, requestId),
         });
       }
 
-      // JSON person profile
       if (url.pathname.startsWith("/api/people/")) {
-        const gate = await requireDashboardAuth(request, env, "json");
+        const notGet = requireGet(request);
+        if (notGet) return notGet;
+        const gate = await requireAccessAuth(request, env, "json", nonce, requestId);
         if (!gate.ok) return gate.response;
-        const personKey = decodeURIComponent(url.pathname.slice("/api/people/".length));
+        const personKey = safeDecodeURIComponent(url.pathname.slice("/api/people/".length));
+        if (personKey === null) {
+          return genericErrorResponse(
+            400,
+            "Bad Request",
+            withRequestIdHeader(undefined, requestId)
+          );
+        }
         const profile = await getPersonProfile(env, personKey);
         if (!profile) {
-          return new Response(JSON.stringify({ error: "Not found" }), {
-            status: 404,
-            headers: { "Content-Type": "application/json" },
-          });
+          return jsonResponse(
+            { error: "Not found" },
+            { status: 404, extra: withRequestIdHeader(undefined, requestId) }
+          );
         }
-        return new Response(JSON.stringify(profile), {
-          headers: { "Content-Type": "application/json" },
-        });
+        return jsonResponse(profile, { extra: withRequestIdHeader(undefined, requestId) });
       }
 
-      // 3. GET /calendar
       if (url.pathname === "/calendar") {
-        const gate = await requireDashboardAuth(request, env, "html");
+        const notGet = requireGet(request);
+        if (notGet) return notGet;
+        const gate = await requireAccessAuth(request, env, "html", nonce, requestId);
         if (!gate.ok) return gate.response;
         let month = url.searchParams.get("month");
-        if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+        if (!month || !isValidMonthString(month)) {
           month = getLocalDate(Date.now(), timezone).substring(0, 7);
         }
         const person = url.searchParams.get("person") || undefined;
@@ -359,18 +217,19 @@ export default withHoneybadger(
           getReportsForMonth(env, month, person),
           getDistinctPeopleForMonth(env, month),
         ]);
-        return new Response(
-          renderCalendar(month, reports, withSelectedPerson(people, person), person),
-          { headers: { "Content-Type": "text/html" } }
+        return htmlResponse(
+          renderCalendar(month, reports, withSelectedPerson(people, person), person, nonce),
+          { nonce, extra: withRequestIdHeader(undefined, requestId) }
         );
       }
 
-      // 4. GET /events
       if (url.pathname === "/events") {
-        const gate = await requireDashboardAuth(request, env, "html");
+        const notGet = requireGet(request);
+        if (notGet) return notGet;
+        const gate = await requireAccessAuth(request, env, "html", nonce, requestId);
         if (!gate.ok) return gate.response;
         let date = url.searchParams.get("date");
-        if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        if (!date || !isValidLocalDateString(date)) {
           date = getLocalDate(Date.now(), timezone);
         }
         const person = url.searchParams.get("person") || undefined;
@@ -378,67 +237,63 @@ export default withHoneybadger(
           getEventsForDate(env, date, person),
           getDistinctPeopleForDate(env, date),
         ]);
-        return new Response(
-          renderEventsLog(date, events, withSelectedPerson(people, person), person),
-          { headers: { "Content-Type": "text/html" } }
+        return htmlResponse(
+          renderEventsLog(date, events, withSelectedPerson(people, person), person, nonce),
+          { nonce, extra: withRequestIdHeader(undefined, requestId) }
         );
       }
 
-      // 5. GET /api/reports?month=YYYY-MM
       if (url.pathname === "/api/reports") {
-        const gate = await requireDashboardAuth(request, env, "json");
+        const notGet = requireGet(request);
+        if (notGet) return notGet;
+        const gate = await requireAccessAuth(request, env, "json", nonce, requestId);
         if (!gate.ok) return gate.response;
         let month = url.searchParams.get("month");
-        if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+        if (!month || !isValidMonthString(month)) {
           month = getLocalDate(Date.now(), timezone).substring(0, 7);
         }
         const person = url.searchParams.get("person") || undefined;
         await ensureReportsForMonth(env, month);
         const reports = await getReportsForMonth(env, month, person);
-        return new Response(JSON.stringify(reports), {
-          headers: { "Content-Type": "application/json" },
-        });
+        return jsonResponse(reports, { extra: withRequestIdHeader(undefined, requestId) });
       }
 
-      // 6. GET /api/events?date=YYYY-MM-DD
       if (url.pathname === "/api/events") {
-        const gate = await requireDashboardAuth(request, env, "json");
+        const notGet = requireGet(request);
+        if (notGet) return notGet;
+        const gate = await requireAccessAuth(request, env, "json", nonce, requestId);
         if (!gate.ok) return gate.response;
         let date = url.searchParams.get("date");
-        if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        if (!date || !isValidLocalDateString(date)) {
           date = getLocalDate(Date.now(), timezone);
         }
         const person = url.searchParams.get("person") || undefined;
         const events = await getEventsForDate(env, date, person);
-        return new Response(JSON.stringify(events), {
-          headers: { "Content-Type": "application/json" },
-        });
+        return jsonResponse(events, { extra: withRequestIdHeader(undefined, requestId) });
       }
 
-      // 7. GET /api/people
       if (url.pathname === "/api/people") {
-        const gate = await requireDashboardAuth(request, env, "json");
+        const notGet = requireGet(request);
+        if (notGet) return notGet;
+        const gate = await requireAccessAuth(request, env, "json", nonce, requestId);
         if (!gate.ok) return gate.response;
         const people = await getPeopleDirectory(env);
-        return new Response(JSON.stringify(people), {
-          headers: { "Content-Type": "application/json" },
-        });
+        return jsonResponse(people, { extra: withRequestIdHeader(undefined, requestId) });
       }
 
-      return new Response("Not Found", { status: 404 });
+      return textResponse("Not Found", {
+        status: 404,
+        extra: withRequestIdHeader(undefined, requestId),
+      });
     },
 
     async scheduled(
-      controller: ScheduledController,
+      _controller: ScheduledController,
       env: Env,
       ctx: ExecutionContext
     ): Promise<void> {
-      const timezone = env.TIMEZONE || "America/New_York";
-      // Daily cron runs once a day. It should compute the PREVIOUS local day's reports.
-      // e.g. run at 6:00 AM UTC = 2:00 AM EST, we compute the report for "yesterday"
+      const timezone = env.TIMEZONE || DEFAULT_TIMEZONE;
       const now = Date.now();
-
-      // Find local date of 12 hours ago to guarantee we get yesterday's date
       const yesterdayMs = now - 12 * 60 * 60 * 1000;
       const yesterdayStr = getLocalDate(yesterdayMs, timezone);
 
@@ -447,34 +302,47 @@ export default withHoneybadger(
       ctx.waitUntil(
         (async () => {
           try {
-            await generateDailyReport(env, yesterdayStr);
+            await generateDailyReport(env, yesterdayStr, { force: true });
             await setCronReportOk(env, yesterdayStr, Date.now());
             console.log(`[Cron] Daily report successfully generated for ${yesterdayStr}`);
           } catch (err) {
-            console.error(`[Cron] Error generating daily report for ${yesterdayStr}:`, err);
-            reportError(env, ctx, err, { component: "cron", path: "generateDailyReport" });
-            await setCronError(env, err instanceof Error ? err.message : String(err)).catch(
-              () => undefined
-            );
+            const code = classifyDbError(err);
+            console.error(`[Cron] Error generating daily report`, code);
+            reportError(env, ctx, err, {
+              component: "cron",
+              path: "generateDailyReport",
+              operation: "generateDailyReport",
+              error_code: code,
+            });
+            await setCronError(env, code, "generateDailyReport").catch(() => undefined);
           }
 
           try {
             const cleanup = await runRetentionCleanup(env);
-            await setCleanupOk(env, {
-              purgedNotifications: cleanup.purgedNotifications,
-              purgedEvents: cleanup.purgedEvents,
-              purgedReports: cleanup.purgedReports,
-              purgedSessions: cleanup.purgedSessions,
-            });
+            await setCleanupOk(env, { ...cleanup });
             console.log(
-              `[Cron] Retention cleanup completed: purged ${cleanup.purgedNotifications} webhooks, ${cleanup.purgedEvents} events, ${cleanup.purgedReports} reports, ${cleanup.purgedSessions} sessions`
+              `[Cron] Retention cleanup completed: scrubbed n=${cleanup.scrubbedNotifications} f=${cleanup.scrubbedFaceEvents} v=${cleanup.scrubbedVehicleEvents}; deleted n=${cleanup.deletedNotifications} f=${cleanup.deletedFaceEvents} v=${cleanup.deletedVehicleEvents} r=${cleanup.deletedReports} s=${cleanup.deletedSessions}`
             );
+
+            const fk = await env.DB.prepare(`PRAGMA foreign_key_check`).all();
+            if ((fk.results || []).length === 0) {
+              await setFkCheckOk(env);
+            } else {
+              await setCronError(env, "D1_FK_CHECK_FAILED", "foreign_key_check");
+              console.error(
+                `[Cron] foreign_key_check returned ${(fk.results || []).length} row(s)`
+              );
+            }
           } catch (err) {
-            console.error(`[Cron] Error running retention cleanup:`, err);
-            reportError(env, ctx, err, { component: "cron", path: "runRetentionCleanup" });
-            await setCronError(env, err instanceof Error ? err.message : String(err)).catch(
-              () => undefined
-            );
+            const code = classifyDbError(err);
+            console.error(`[Cron] Error running retention cleanup`, code);
+            reportError(env, ctx, err, {
+              component: "cron",
+              path: "runRetentionCleanup",
+              operation: "runRetentionCleanup",
+              error_code: code,
+            });
+            await setCronError(env, code, "runRetentionCleanup").catch(() => undefined);
           }
         })()
       );

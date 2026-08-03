@@ -2,18 +2,30 @@ export interface Env {
   DB: D1Database;
   KV: KVNamespace;
   WEBHOOK_SECRET?: string;
+  /** Local-only opt-in: allow POST /unifi without WEBHOOK_SECRET when "true" */
+  ALLOW_INSECURE_WEBHOOKS?: string;
+  /** Max webhook body bytes (default 2MiB) */
+  MAX_WEBHOOK_BODY_BYTES?: string;
+  /** When "true", ingest license_plate_* triggers (default off — experimental/storage-only) */
+  ENABLE_VEHICLE_EVENTS?: string;
   TIMEZONE?: string;
   TARGET_PERSON_NAMES?: string;
   TARGET_PERSON_IDS?: string;
   WATCH_CAMERA_IDS?: string;
-  /** Comma-separated Google emails allowed to access the dashboard */
+  /**
+   * Comma-separated exact emails allowed by Cloudflare Access policy and Worker JWT checks.
+   * Source of truth for application access — no wildcards or domain rules.
+   */
   ALLOWED_EMAILS?: string;
-  BETTER_AUTH_SECRET?: string;
-  /** Better Auth Infrastructure API key; also used as signing secret fallback */
-  BETTER_AUTH_API_KEY?: string;
-  BETTER_AUTH_URL?: string;
-  GOOGLE_CLIENT_ID?: string;
-  GOOGLE_CLIENT_SECRET?: string;
+  /** Cloudflare Access team domain, e.g. https://example.cloudflareaccess.com */
+  CF_ACCESS_TEAM_DOMAIN?: string;
+  /** Cloudflare Access application audience (AUD) tag */
+  CF_ACCESS_AUD?: string;
+  /**
+   * Local-only: allow dashboard requests without Access JWT when host is localhost.
+   * Never enable in production.
+   */
+  ALLOW_LOCAL_AUTH_BYPASS?: string;
   /** Honeybadger project API key for Worker error reporting */
   HONEYBADGER_API_KEY?: string;
   /** Default gap minutes between sightings before a new presence session (default 20) */
@@ -57,7 +69,8 @@ export interface UnifiWebhookPayload {
 
 export interface FaceEvent {
   id: string;
-  notification_id: string;
+  /** Null after parent webhook retention cleanup (ON DELETE SET NULL) */
+  notification_id: string | null;
   event_id: string;
   seen_at_ms: number;
   local_date: string; // YYYY-MM-DD
@@ -73,7 +86,8 @@ export interface FaceEvent {
 
 export interface VehicleEvent {
   id: string;
-  notification_id: string;
+  /** Null after parent webhook retention cleanup (ON DELETE SET NULL) */
+  notification_id: string | null;
   event_id: string;
   seen_at_ms: number;
   local_date: string; // YYYY-MM-DD
@@ -223,6 +237,15 @@ export interface WebhookNotification {
   alarm_name: string;
   payload_json: string;
   image_base64?: string;
+  delivery_key?: string;
+}
+
+export interface MaterializationState {
+  local_date: string;
+  source_event_count: number;
+  max_seen_at_ms: number;
+  materializer_version: number;
+  generated_at_ms: number;
 }
 
 export interface HealthDbUsage {
@@ -246,6 +269,7 @@ export interface HealthSnapshot {
   today_counters: {
     rejected_auth: number;
     rejected_json: number;
+    rejected_body: number;
     ingested_webhooks: number;
     events_attempted: number;
     events_inserted: number;
@@ -260,9 +284,17 @@ export interface HealthSnapshot {
   last_cron_report_date: string | null;
   last_cleanup_at_ms: number | null;
   last_cleanup_summary: Record<string, number> | null;
+  last_fk_check_at_ms: number | null;
+  last_fk_check_ok: boolean | null;
+  cleanup_stale: boolean;
   last_d1_error_at_ms: number | null;
-  last_d1_error: string | null;
-  last_cron_error: { at_ms: number; message: string } | null;
+  last_d1_error: { code: string; operation: string; at_ms: number } | null;
+  last_cron_error: { code: string; operation: string; at_ms: number } | null;
   db_usage: HealthDbUsage;
   config_warnings: string[];
+  access: {
+    configured: boolean;
+    allowlist_count: number;
+    last_jwt_failure_class: string | null;
+  };
 }

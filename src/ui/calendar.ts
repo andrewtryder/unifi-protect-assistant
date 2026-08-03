@@ -10,7 +10,8 @@ export function renderCalendar(
   monthStr: string,
   reports: DailyReport[],
   people: PersonSummary[],
-  selectedPerson?: string
+  selectedPerson?: string,
+  nonce?: string
 ): string {
   const [year, month] = monthStr.split("-").map(Number);
 
@@ -258,5 +259,6 @@ export function renderCalendar(
   return renderLayout(`Calendar - ${monthStr}${titleSuffix}`, calendarHtml, {
     selectedPerson,
     calendarMonth: monthStr,
+    nonce,
   });
 }

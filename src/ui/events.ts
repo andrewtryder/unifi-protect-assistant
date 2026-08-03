@@ -16,7 +16,8 @@ export function renderEventsLog(
   dateStr: string,
   events: FaceEvent[],
   people: PersonSummary[],
-  selectedPerson?: string
+  selectedPerson?: string,
+  nonce?: string
 ): string {
   let rowsHtml: string;
   if (events.length === 0) {
@@ -229,5 +230,6 @@ export function renderEventsLog(
     selectedPerson,
     eventsDate: dateStr,
     calendarMonth,
+    nonce,
   });
 }

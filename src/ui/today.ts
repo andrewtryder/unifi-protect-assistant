@@ -61,7 +61,7 @@ function streamRowsHtml(snapshot: TodaySnapshot): string {
     .join("");
 }
 
-export function renderTodayDashboard(snapshot: TodaySnapshot): string {
+export function renderTodayDashboard(snapshot: TodaySnapshot, nonce?: string): string {
   const nowMs = snapshot.generated_at_ms;
   const healthClass = snapshot.webhook.healthy ? "badge-accent" : "badge";
   const healthLabel = snapshot.webhook.healthy ? "Healthy" : "Stale / quiet";
@@ -298,6 +298,7 @@ export function renderTodayDashboard(snapshot: TodaySnapshot): string {
   `;
 
   return renderLayout(`Today — ${snapshot.local_date}`, body, {
+    nonce,
     eventsDate: snapshot.local_date,
   });
 }

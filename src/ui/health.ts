@@ -27,7 +27,7 @@ function formatAge(ms: number | null, nowMs: number): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-export function renderHealthPage(snapshot: HealthSnapshot): string {
+export function renderHealthPage(snapshot: HealthSnapshot, nonce?: string): string {
   const now = snapshot.generated_at_ms;
   const healthClass = snapshot.webhook_healthy ? "badge-accent" : "badge";
   const healthLabel = snapshot.webhook_healthy ? "Healthy" : "Stale / quiet";
@@ -137,13 +137,14 @@ export function renderHealthPage(snapshot: HealthSnapshot): string {
     </div>
 
     <div class="section card">
-      <h3>Today’s ingest counters <span style="color:var(--text-muted);font-weight:400;font-size:0.85rem;">(KV · since deploy or midnight)</span></h3>
+      <h3>Today’s ingest counters <span style="color:var(--text-muted);font-weight:400;font-size:0.85rem;">(D1 · local day)</span></h3>
       <div class="table-container">
         <table>
           <thead>
             <tr>
               <th>Rejected auth</th>
               <th>Invalid JSON</th>
+              <th>Oversized body</th>
               <th>Ingested</th>
               <th>Faces attempted</th>
               <th>Faces inserted</th>
@@ -159,6 +160,7 @@ export function renderHealthPage(snapshot: HealthSnapshot): string {
             <tr>
               <td>${c.rejected_auth}</td>
               <td>${c.rejected_json}</td>
+              <td>${c.rejected_body}</td>
               <td>${c.ingested_webhooks}</td>
               <td>${c.events_attempted}</td>
               <td>${c.events_inserted}</td>
@@ -172,10 +174,10 @@ export function renderHealthPage(snapshot: HealthSnapshot): string {
           </tbody>
         </table>
       </div>
-      <p class="kv-note">Parsing failures = Invalid JSON. Zero detections means a valid payload stored with no face or plate events after filters.</p>
+      <p class="kv-note">Parsing failures = Invalid JSON. Zero detections means a valid payload stored with no face or plate events after filters. Counters are atomic D1 upserts.</p>
       ${
         snapshot.last_d1_error
-          ? `<p class="error-box">Last D1 error (${formatWhen(snapshot.last_d1_error_at_ms)}): ${escapeHtml(snapshot.last_d1_error)}</p>`
+          ? `<p class="error-box">Last D1 error (${formatWhen(snapshot.last_d1_error_at_ms)}): ${escapeHtml(snapshot.last_d1_error.code)} @ ${escapeHtml(snapshot.last_d1_error.operation)}</p>`
           : ""
       }
     </div>
@@ -204,7 +206,17 @@ export function renderHealthPage(snapshot: HealthSnapshot): string {
       </div>
       ${
         snapshot.last_cron_error
-          ? `<p class="error-box">Last cron error (${formatWhen(snapshot.last_cron_error.at_ms)}): ${escapeHtml(snapshot.last_cron_error.message)}</p>`
+          ? `<p class="error-box">Last cron error (${formatWhen(snapshot.last_cron_error.at_ms)}): ${escapeHtml(snapshot.last_cron_error.code)} @ ${escapeHtml(snapshot.last_cron_error.operation)}</p>`
+          : ""
+      }
+      ${
+        snapshot.cleanup_stale
+          ? `<p class="error-box">Warning: retention cleanup is stale (no successful run within ~36h).</p>`
+          : ""
+      }
+      ${
+        snapshot.last_fk_check_at_ms != null
+          ? `<p class="kv-note">Last FK integrity check: ${formatWhen(snapshot.last_fk_check_at_ms)} · ${snapshot.last_fk_check_ok ? "ok" : "failed"}</p>`
           : ""
       }
     </div>
@@ -237,10 +249,23 @@ export function renderHealthPage(snapshot: HealthSnapshot): string {
     </div>
 
     <div class="section card">
+      <h3>Cloudflare Access</h3>
+      <p class="kv-note">
+        Configured: ${snapshot.access.configured ? "yes" : "no"} ·
+        Allowed identities: ${snapshot.access.allowlist_count}
+        ${
+          snapshot.access.last_jwt_failure_class
+            ? ` · Last JWT failure class: ${escapeHtml(snapshot.access.last_jwt_failure_class)}`
+            : ""
+        }
+      </p>
+    </div>
+
+    <div class="section card">
       <h3>Configuration warnings</h3>
       ${warningsHtml}
     </div>
   `;
 
-  return renderLayout("Health", body);
+  return renderLayout("Health", body, { nonce });
 }

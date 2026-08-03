@@ -1,9 +1,8 @@
 import { describe, it, expect } from "vitest";
+import { ingestWebhook } from "../src/webhook/ingester.js";
 import { emptyCounters, mergeCounters, parseCountersJson } from "../src/ops/kvCounters.js";
 import { getConfigWarnings } from "../src/ops/configWarnings.js";
-import type { Env } from "../src/types.js";
-import { ingestWebhook } from "../src/webhook/ingester.js";
-import type { FaceEvent } from "../src/types.js";
+import type { Env, FaceEvent } from "../src/types.js";
 
 describe("ops counter helpers", () => {
   it("merges increments", () => {
@@ -27,37 +26,37 @@ describe("getConfigWarnings", () => {
     KV: {} as KVNamespace,
   };
 
+  const accessComplete = {
+    WEBHOOK_SECRET: "x",
+    ALLOWED_EMAILS: "a@b.com",
+    CF_ACCESS_TEAM_DOMAIN: "https://example.cloudflareaccess.com",
+    CF_ACCESS_AUD: "aud-test",
+    HONEYBADGER_API_KEY: "hb_test",
+  };
+
   it("warns on empty allowlist and missing webhook secret", () => {
     const warnings = getConfigWarnings(base);
     expect(warnings.some((w) => w.includes("WEBHOOK_SECRET"))).toBe(true);
     expect(warnings.some((w) => w.includes("ALLOWED_EMAILS"))).toBe(true);
   });
 
-  it("warns on missing auth secret and infrastructure API key separately", () => {
+  it("warns on missing Cloudflare Access config and Honeybadger key", () => {
     const warnings = getConfigWarnings({
       ...base,
       WEBHOOK_SECRET: "x",
       ALLOWED_EMAILS: "a@b.com",
-      GOOGLE_CLIENT_ID: "id",
-      GOOGLE_CLIENT_SECRET: "secret",
     });
-    expect(warnings.some((w) => w.includes("BETTER_AUTH_URL"))).toBe(true);
-    expect(warnings.some((w) => w.includes("BETTER_AUTH_SECRET"))).toBe(true);
-    expect(warnings.some((w) => w.includes("BETTER_AUTH_API_KEY"))).toBe(true);
+    expect(warnings.some((w) => w.includes("CF_ACCESS_TEAM_DOMAIN"))).toBe(true);
+    expect(warnings.some((w) => w.includes("CF_ACCESS_AUD"))).toBe(true);
     expect(warnings.some((w) => w.includes("HONEYBADGER_API_KEY"))).toBe(true);
+    expect(warnings.some((w) => w.includes("BETTER_AUTH"))).toBe(false);
+    expect(warnings.some((w) => w.includes("GOOGLE_CLIENT"))).toBe(false);
   });
 
   it("warns on invalid presence gap JSON", () => {
     const warnings = getConfigWarnings({
       ...base,
-      WEBHOOK_SECRET: "x",
-      ALLOWED_EMAILS: "a@b.com",
-      GOOGLE_CLIENT_ID: "id",
-      GOOGLE_CLIENT_SECRET: "secret",
-      BETTER_AUTH_URL: "https://example.com",
-      BETTER_AUTH_SECRET: "secret-secret-secret-secret-secret",
-      BETTER_AUTH_API_KEY: "ba_test",
-      HONEYBADGER_API_KEY: "hb_test",
+      ...accessComplete,
       PRESENCE_GAP_BY_PERSON: "{bad",
     });
     expect(warnings.some((w) => w.includes("PRESENCE_GAP_BY_PERSON"))).toBe(true);
@@ -66,14 +65,7 @@ describe("getConfigWarnings", () => {
   it("returns empty when config looks complete", () => {
     const warnings = getConfigWarnings({
       ...base,
-      WEBHOOK_SECRET: "x",
-      ALLOWED_EMAILS: "a@b.com",
-      GOOGLE_CLIENT_ID: "id",
-      GOOGLE_CLIENT_SECRET: "secret",
-      BETTER_AUTH_URL: "https://example.com",
-      BETTER_AUTH_SECRET: "secret-secret-secret-secret-secret",
-      BETTER_AUTH_API_KEY: "ba_test",
-      HONEYBADGER_API_KEY: "hb_test",
+      ...accessComplete,
     });
     expect(warnings).toEqual([]);
   });
@@ -97,34 +89,54 @@ describe("ingestWebhook stats", () => {
     };
   }
 
-  it("counts inserts and duplicates from batch meta.changes", async () => {
-    const batchMeta = [
-      { meta: { changes: 1 } }, // notification
-      { meta: { changes: 1 } }, // event insert
-      { meta: { changes: 0 } }, // duplicate ignore
-    ];
-    const env = {
-      DB: {
-        prepare() {
-          return {
-            bind() {
-              return {};
-            },
-          };
-        },
-        async batch() {
-          return batchMeta;
-        },
+  function mockDb(parentChanges: number, childChanges: number[]) {
+    return {
+      prepare(sql: string) {
+        return {
+          bind() {
+            return {
+              async run() {
+                if (sql.includes("webhook_notifications")) {
+                  return { meta: { changes: parentChanges }, success: true };
+                }
+                return { meta: { changes: 0 }, success: true };
+              },
+              async first() {
+                return parentChanges === 0 ? { id: "existing-notif" } : null;
+              },
+            };
+          },
+        };
       },
+      async batch() {
+        return childChanges.map((changes) => ({ meta: { changes } }));
+      },
+    } as unknown as D1Database;
+  }
+
+  it("counts inserts and duplicates from batch meta.changes", async () => {
+    const env = {
+      DB: mockDb(1, [1, 0]),
       KV: {} as KVNamespace,
     } as unknown as Env;
 
-    const result = await ingestWebhook(env, "notif", 1, "0.0.0.0", "e", "alarm", "{}", [
-      face("e1"),
-      face("e2"),
-    ]);
+    const result = await ingestWebhook(
+      env,
+      "notif",
+      1,
+      "0.0.0.0",
+      "e",
+      "alarm",
+      "{}",
+      [face("e1"), face("e2")],
+      undefined,
+      [],
+      "delivery-key-1"
+    );
 
     expect(result).toEqual({
+      notificationInserted: true,
+      notificationId: "notif",
       eventsAttempted: 2,
       eventsInserted: 1,
       duplicates: 1,
@@ -135,25 +147,8 @@ describe("ingestWebhook stats", () => {
   });
 
   it("counts vehicle inserts separately from faces", async () => {
-    const batchMeta = [
-      { meta: { changes: 1 } }, // notification
-      { meta: { changes: 1 } }, // face
-      { meta: { changes: 1 } }, // vehicle insert
-      { meta: { changes: 0 } }, // vehicle duplicate
-    ];
     const env = {
-      DB: {
-        prepare() {
-          return {
-            bind() {
-              return {};
-            },
-          };
-        },
-        async batch() {
-          return batchMeta;
-        },
-      },
+      DB: mockDb(1, [1, 1, 0]),
       KV: {} as KVNamespace,
     } as unknown as Env;
 
@@ -181,10 +176,13 @@ describe("ingestWebhook stats", () => {
       "{}",
       [face("e1")],
       undefined,
-      [vehicle, { ...vehicle, id: "v2", event_id: "ve2" }]
+      [vehicle, { ...vehicle, id: "v2", event_id: "ve2" }],
+      "delivery-key-2"
     );
 
     expect(result).toEqual({
+      notificationInserted: true,
+      notificationId: "notif",
       eventsAttempted: 1,
       eventsInserted: 1,
       duplicates: 0,

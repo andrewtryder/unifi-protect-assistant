@@ -10,11 +10,17 @@ TARGET_PERSON_NAMES = ""
 TARGET_PERSON_IDS = ""
 WATCH_CAMERA_IDS = ""
 # ALLOWED_EMAILS is a Worker secret (synced from GitHub Actions on deploy)
-BETTER_AUTH_URL = "https://unifi-protect-assistant.mrcoffee.workers.dev"
+# CF_ACCESS_TEAM_DOMAIN / CF_ACCESS_AUD are Worker secrets (set after Access provisioning)
 
 PRESENCE_GAP_MINUTES = "20"
 PRESENCE_GAP_BY_PERSON = ""
 PRESENCE_GAP_BY_CAMERA = ""
+
+# Vehicle/license-plate ingestion is experimental and off by default.
+ENABLE_VEHICLE_EVENTS = "false"
+# Never set ALLOW_INSECURE_WEBHOOKS or ALLOW_LOCAL_AUTH_BYPASS in production.
+ALLOW_INSECURE_WEBHOOKS = "false"
+MAX_WEBHOOK_BODY_BYTES = "2097152"
 
 [[d1_databases]]
 binding = "DB"

@@ -3,7 +3,8 @@ import { getLocalDate } from "../webhook/parser.js";
 import { getHealthDbFacts } from "../db/queries.js";
 import { getTodayCounters, readOpsMarkers } from "./kvCounters.js";
 import { getConfigWarnings } from "./configWarnings.js";
-import { WEBHOOK_STALE_MS } from "./constants.js";
+import { CLEANUP_STALE_MS, WEBHOOK_STALE_MS } from "./constants.js";
+import { accessHealthSummary } from "../config.js";
 
 export async function buildHealthSnapshot(
   env: Env,
@@ -22,6 +23,20 @@ export async function buildHealthSnapshot(
   const webhook_healthy =
     facts.last_webhook_at_ms != null && nowMs - facts.last_webhook_at_ms <= WEBHOOK_STALE_MS;
 
+  const cleanup_stale =
+    markers.last_cleanup_at_ms == null || nowMs - markers.last_cleanup_at_ms > CLEANUP_STALE_MS;
+
+  if (cleanup_stale && !config_warnings.some((w) => w.includes("cleanup"))) {
+    config_warnings.push(
+      "Retention cleanup has not succeeded within the expected interval (~36h)."
+    );
+  }
+
+  const access = accessHealthSummary(env);
+  const lastJwtFailure = await env.KV.get("ops:last_access_jwt_failure_class").catch(
+    () => null as string | null
+  );
+
   return {
     generated_at_ms: nowMs,
     local_date: localDate,
@@ -37,10 +52,30 @@ export async function buildHealthSnapshot(
     last_cron_report_date: markers.last_cron_report_date,
     last_cleanup_at_ms: markers.last_cleanup_at_ms,
     last_cleanup_summary: markers.last_cleanup_summary,
+    last_fk_check_at_ms: markers.last_fk_check_at_ms,
+    last_fk_check_ok: markers.last_fk_check_ok,
+    cleanup_stale,
     last_d1_error_at_ms: markers.last_d1_error_at_ms,
-    last_d1_error: markers.last_d1_error,
-    last_cron_error: markers.last_cron_error,
+    last_d1_error: markers.last_d1_error
+      ? {
+          code: markers.last_d1_error.code,
+          operation: markers.last_d1_error.operation,
+          at_ms: markers.last_d1_error.at_ms,
+        }
+      : null,
+    last_cron_error: markers.last_cron_error
+      ? {
+          code: markers.last_cron_error.code,
+          operation: markers.last_cron_error.operation,
+          at_ms: markers.last_cron_error.at_ms,
+        }
+      : null,
     db_usage: facts.db_usage,
     config_warnings,
+    access: {
+      configured: access.configured,
+      allowlist_count: access.allowlist_count,
+      last_jwt_failure_class: lastJwtFailure,
+    },
   };
 }

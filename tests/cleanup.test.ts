@@ -1,12 +1,16 @@
 import { describe, it, expect } from "vitest";
+import {
+  retentionCutoffs,
+  RAW_RETENTION_DAYS,
+  NORMALIZED_RETENTION_DAYS,
+  DAY_MS,
+} from "../src/reporting/cleanup.js";
 
 describe("Retention Calculations", () => {
   it("should calculate cutoff dates correctly relative to now", () => {
     const now = Date.now();
-    const oneMonthAgoMs = now - 30 * 24 * 60 * 60 * 1000;
-    const twelveMonthsAgoMs = now - 365 * 24 * 60 * 60 * 1000;
-
-    expect(now - oneMonthAgoMs).toBe(30 * 24 * 60 * 60 * 1000);
-    expect(now - twelveMonthsAgoMs).toBe(365 * 24 * 60 * 60 * 1000);
+    const { rawCutoffMs, normalizedCutoffMs } = retentionCutoffs(now);
+    expect(now - rawCutoffMs).toBe(RAW_RETENTION_DAYS * DAY_MS);
+    expect(now - normalizedCutoffMs).toBe(NORMALIZED_RETENTION_DAYS * DAY_MS);
   });
 });

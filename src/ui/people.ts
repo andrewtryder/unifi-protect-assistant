@@ -24,7 +24,7 @@ function profileHref(personKey: string): string {
   return `/people/${encodeURIComponent(personKey)}`;
 }
 
-export function renderPeopleDirectory(people: PersonDirectoryEntry[]): string {
+export function renderPeopleDirectory(people: PersonDirectoryEntry[], nonce?: string): string {
   const rows =
     people.length === 0
       ? `<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:2rem;">No people recorded yet.</td></tr>`
@@ -71,7 +71,7 @@ export function renderPeopleDirectory(people: PersonDirectoryEntry[]): string {
     </div>
   `;
 
-  return renderLayout("People", body);
+  return renderLayout("People", body, { nonce });
 }
 
 function renderHeatmap(heatmap: PersonHeatmapDay[], personName: string): string {
@@ -129,7 +129,7 @@ function renderHeatmap(heatmap: PersonHeatmapDay[], personName: string): string 
   return `<div class="heat-wrap">${monthBlocks}</div>`;
 }
 
-export function renderPersonProfile(profile: PersonProfile): string {
+export function renderPersonProfile(profile: PersonProfile, nonce?: string): string {
   const maxCam = Math.max(1, ...profile.cameras.map((c) => c.event_count));
   const camerasHtml =
     profile.cameras.length === 0
@@ -358,10 +358,10 @@ export function renderPersonProfile(profile: PersonProfile): string {
     </div>
   `;
 
-  return renderLayout(profile.person_name, body);
+  return renderLayout(profile.person_name, body, { nonce });
 }
 
-export function renderPersonNotFound(personKey: string): string {
+export function renderPersonNotFound(personKey: string, nonce?: string): string {
   const body = `
     <div class="card" style="padding:2rem;text-align:center;">
       <h2 style="font-family:var(--font);margin-bottom:0.75rem;">Person not found</h2>
@@ -369,5 +369,5 @@ export function renderPersonNotFound(personKey: string): string {
       <a href="/people" style="color:var(--accent);">← Back to people</a>
     </div>
   `;
-  return renderLayout("Not found", body);
+  return renderLayout("Not found", body, { nonce });
 }
