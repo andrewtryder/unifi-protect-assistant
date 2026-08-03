@@ -13,12 +13,9 @@ import { ensureReportsForMonth, generateDailyReport } from "./reporting/generato
 import { runRetentionCleanup } from "./reporting/cleanup.js";
 import { renderCalendar } from "./ui/calendar.js";
 import { renderEventsLog } from "./ui/events.js";
-import { renderLoginPage } from "./ui/login.js";
 import { renderTodayDashboard } from "./ui/today.js";
 import { renderPeopleDirectory, renderPersonProfile, renderPersonNotFound } from "./ui/people.js";
 import { PersonSummary } from "./types.js";
-import { createAuth } from "./auth.js";
-import { isEmailAllowed } from "./auth-allowlist.js";
 import { buildTodaySnapshot } from "./reporting/sessions.js";
 import {
   classifyDbError,
@@ -47,6 +44,7 @@ import {
   safeDecodeURIComponent,
 } from "./http/dates.js";
 import { handleReady } from "./http/ready.js";
+import { requireAccessAuth } from "./auth/gate.js";
 
 function withSelectedPerson(people: PersonSummary[], selectedPerson?: string): PersonSummary[] {
   if (!selectedPerson) return people;
@@ -57,61 +55,6 @@ function withSelectedPerson(people: PersonSummary[], selectedPerson?: string): P
   return [...people, { person_name: selectedPerson, last_seen_ms: 0, event_count: 0 }].sort(
     (a, b) => a.person_name.localeCompare(b.person_name)
   );
-}
-
-type AuthGate = { ok: true } | { ok: false; response: Response };
-
-async function requireDashboardAuth(
-  request: Request,
-  env: Env,
-  mode: "html" | "json",
-  nonce: string,
-  requestId: string
-): Promise<AuthGate> {
-  const auth = createAuth(env);
-  const session = await auth.api.getSession({ headers: request.headers });
-
-  if (!session) {
-    if (mode === "json") {
-      return {
-        ok: false,
-        response: jsonResponse(
-          { error: "Unauthorized" },
-          { status: 401, extra: withRequestIdHeader(undefined, requestId) }
-        ),
-      };
-    }
-    const loginUrl = new URL("/login", request.url);
-    return {
-      ok: false,
-      response: Response.redirect(loginUrl.toString(), 302),
-    };
-  }
-
-  if (!isEmailAllowed(session.user.email, env)) {
-    if (mode === "json") {
-      return {
-        ok: false,
-        response: jsonResponse(
-          { error: "Forbidden" },
-          { status: 403, extra: withRequestIdHeader(undefined, requestId) }
-        ),
-      };
-    }
-    return {
-      ok: false,
-      response: htmlResponse(
-        renderLoginPage("Your email is not authorized to access this app.", nonce),
-        {
-          status: 403,
-          nonce,
-          extra: withRequestIdHeader(undefined, requestId),
-        }
-      ),
-    };
-  }
-
-  return { ok: true };
 }
 
 function requireGet(request: Request): Response | null {
@@ -140,47 +83,14 @@ export default withHoneybadger(
         return new Response(res.body, { status: res.status, headers });
       }
 
-      if (url.pathname.startsWith("/api/auth")) {
-        try {
-          const auth = createAuth(env);
-          const res = await auth.handler(request);
-          const headers = withRequestIdHeader(res.headers, requestId);
-          return new Response(res.body, { status: res.status, headers });
-        } catch (err: unknown) {
-          console.error("[auth] handler error", requestId);
-          reportError(env, ctx, err, {
-            component: "auth",
-            path: url.pathname,
-            request_id: requestId,
-            operation: "auth.handler",
-          });
-          return genericErrorResponse(
-            500,
-            "Internal Server Error",
-            withRequestIdHeader(undefined, requestId)
-          );
-        }
-      }
-
       if (url.pathname === "/unifi") {
         return handleUnifiWebhook(request, env, ctx, requestId);
-      }
-
-      if (url.pathname === "/login") {
-        const notGet = requireGet(request);
-        if (notGet) return notGet;
-        const error = url.searchParams.get("error") || undefined;
-        return htmlResponse(renderLoginPage(error || undefined, nonce), {
-          nonce,
-          noStore: true,
-          extra: withRequestIdHeader(undefined, requestId),
-        });
       }
 
       if (url.pathname === "/") {
         const notGet = requireGet(request);
         if (notGet) return notGet;
-        const gate = await requireDashboardAuth(request, env, "html", nonce, requestId);
+        const gate = await requireAccessAuth(request, env, "html", nonce, requestId);
         if (!gate.ok) return gate.response;
         return Response.redirect(`${url.origin}/today`, 302);
       }
@@ -188,7 +98,7 @@ export default withHoneybadger(
       if (url.pathname === "/today") {
         const notGet = requireGet(request);
         if (notGet) return notGet;
-        const gate = await requireDashboardAuth(request, env, "html", nonce, requestId);
+        const gate = await requireAccessAuth(request, env, "html", nonce, requestId);
         if (!gate.ok) return gate.response;
         const snapshot = await buildTodaySnapshot(env);
         return htmlResponse(renderTodayDashboard(snapshot, nonce), {
@@ -200,7 +110,7 @@ export default withHoneybadger(
       if (url.pathname === "/api/today") {
         const notGet = requireGet(request);
         if (notGet) return notGet;
-        const gate = await requireDashboardAuth(request, env, "json", nonce, requestId);
+        const gate = await requireAccessAuth(request, env, "json", nonce, requestId);
         if (!gate.ok) return gate.response;
         const snapshot = await buildTodaySnapshot(env);
         return jsonResponse(snapshot, { extra: withRequestIdHeader(undefined, requestId) });
@@ -209,7 +119,7 @@ export default withHoneybadger(
       if (url.pathname === "/health") {
         const notGet = requireGet(request);
         if (notGet) return notGet;
-        const gate = await requireDashboardAuth(request, env, "html", nonce, requestId);
+        const gate = await requireAccessAuth(request, env, "html", nonce, requestId);
         if (!gate.ok) return gate.response;
         const snapshot = await buildHealthSnapshot(env);
         return htmlResponse(renderHealthPage(snapshot, nonce), {
@@ -221,7 +131,7 @@ export default withHoneybadger(
       if (url.pathname === "/api/health") {
         const notGet = requireGet(request);
         if (notGet) return notGet;
-        const gate = await requireDashboardAuth(request, env, "json", nonce, requestId);
+        const gate = await requireAccessAuth(request, env, "json", nonce, requestId);
         if (!gate.ok) return gate.response;
         const snapshot = await buildHealthSnapshot(env);
         return jsonResponse(snapshot, { extra: withRequestIdHeader(undefined, requestId) });
@@ -230,7 +140,7 @@ export default withHoneybadger(
       if (url.pathname === "/people") {
         const notGet = requireGet(request);
         if (notGet) return notGet;
-        const gate = await requireDashboardAuth(request, env, "html", nonce, requestId);
+        const gate = await requireAccessAuth(request, env, "html", nonce, requestId);
         if (!gate.ok) return gate.response;
         const people = await getPeopleDirectory(env);
         return htmlResponse(renderPeopleDirectory(people, nonce), {
@@ -242,7 +152,7 @@ export default withHoneybadger(
       if (url.pathname.startsWith("/people/")) {
         const notGet = requireGet(request);
         if (notGet) return notGet;
-        const gate = await requireDashboardAuth(request, env, "html", nonce, requestId);
+        const gate = await requireAccessAuth(request, env, "html", nonce, requestId);
         if (!gate.ok) return gate.response;
         const personKey = safeDecodeURIComponent(url.pathname.slice("/people/".length));
         if (personKey === null) {
@@ -272,7 +182,7 @@ export default withHoneybadger(
       if (url.pathname.startsWith("/api/people/")) {
         const notGet = requireGet(request);
         if (notGet) return notGet;
-        const gate = await requireDashboardAuth(request, env, "json", nonce, requestId);
+        const gate = await requireAccessAuth(request, env, "json", nonce, requestId);
         if (!gate.ok) return gate.response;
         const personKey = safeDecodeURIComponent(url.pathname.slice("/api/people/".length));
         if (personKey === null) {
@@ -295,7 +205,7 @@ export default withHoneybadger(
       if (url.pathname === "/calendar") {
         const notGet = requireGet(request);
         if (notGet) return notGet;
-        const gate = await requireDashboardAuth(request, env, "html", nonce, requestId);
+        const gate = await requireAccessAuth(request, env, "html", nonce, requestId);
         if (!gate.ok) return gate.response;
         let month = url.searchParams.get("month");
         if (!month || !isValidMonthString(month)) {
@@ -316,7 +226,7 @@ export default withHoneybadger(
       if (url.pathname === "/events") {
         const notGet = requireGet(request);
         if (notGet) return notGet;
-        const gate = await requireDashboardAuth(request, env, "html", nonce, requestId);
+        const gate = await requireAccessAuth(request, env, "html", nonce, requestId);
         if (!gate.ok) return gate.response;
         let date = url.searchParams.get("date");
         if (!date || !isValidLocalDateString(date)) {
@@ -336,7 +246,7 @@ export default withHoneybadger(
       if (url.pathname === "/api/reports") {
         const notGet = requireGet(request);
         if (notGet) return notGet;
-        const gate = await requireDashboardAuth(request, env, "json", nonce, requestId);
+        const gate = await requireAccessAuth(request, env, "json", nonce, requestId);
         if (!gate.ok) return gate.response;
         let month = url.searchParams.get("month");
         if (!month || !isValidMonthString(month)) {
@@ -351,7 +261,7 @@ export default withHoneybadger(
       if (url.pathname === "/api/events") {
         const notGet = requireGet(request);
         if (notGet) return notGet;
-        const gate = await requireDashboardAuth(request, env, "json", nonce, requestId);
+        const gate = await requireAccessAuth(request, env, "json", nonce, requestId);
         if (!gate.ok) return gate.response;
         let date = url.searchParams.get("date");
         if (!date || !isValidLocalDateString(date)) {
@@ -365,7 +275,7 @@ export default withHoneybadger(
       if (url.pathname === "/api/people") {
         const notGet = requireGet(request);
         if (notGet) return notGet;
-        const gate = await requireDashboardAuth(request, env, "json", nonce, requestId);
+        const gate = await requireAccessAuth(request, env, "json", nonce, requestId);
         if (!gate.ok) return gate.response;
         const people = await getPeopleDirectory(env);
         return jsonResponse(people, { extra: withRequestIdHeader(undefined, requestId) });

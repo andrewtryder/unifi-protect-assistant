@@ -12,14 +12,20 @@ export interface Env {
   TARGET_PERSON_NAMES?: string;
   TARGET_PERSON_IDS?: string;
   WATCH_CAMERA_IDS?: string;
-  /** Comma-separated Google emails allowed to access the dashboard */
+  /**
+   * Comma-separated exact emails allowed by Cloudflare Access policy and Worker JWT checks.
+   * Source of truth for application access — no wildcards or domain rules.
+   */
   ALLOWED_EMAILS?: string;
-  BETTER_AUTH_SECRET?: string;
-  /** Better Auth Infrastructure API key (dash plugin); not a signing-secret fallback */
-  BETTER_AUTH_API_KEY?: string;
-  BETTER_AUTH_URL?: string;
-  GOOGLE_CLIENT_ID?: string;
-  GOOGLE_CLIENT_SECRET?: string;
+  /** Cloudflare Access team domain, e.g. https://example.cloudflareaccess.com */
+  CF_ACCESS_TEAM_DOMAIN?: string;
+  /** Cloudflare Access application audience (AUD) tag */
+  CF_ACCESS_AUD?: string;
+  /**
+   * Local-only: allow dashboard requests without Access JWT when host is localhost.
+   * Never enable in production.
+   */
+  ALLOW_LOCAL_AUTH_BYPASS?: string;
   /** Honeybadger project API key for Worker error reporting */
   HONEYBADGER_API_KEY?: string;
   /** Default gap minutes between sightings before a new presence session (default 20) */
@@ -286,4 +292,9 @@ export interface HealthSnapshot {
   last_cron_error: { code: string; operation: string; at_ms: number } | null;
   db_usage: HealthDbUsage;
   config_warnings: string[];
+  access: {
+    configured: boolean;
+    allowlist_count: number;
+    last_jwt_failure_class: string | null;
+  };
 }

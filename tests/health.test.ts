@@ -26,37 +26,37 @@ describe("getConfigWarnings", () => {
     KV: {} as KVNamespace,
   };
 
+  const accessComplete = {
+    WEBHOOK_SECRET: "x",
+    ALLOWED_EMAILS: "a@b.com",
+    CF_ACCESS_TEAM_DOMAIN: "https://example.cloudflareaccess.com",
+    CF_ACCESS_AUD: "aud-test",
+    HONEYBADGER_API_KEY: "hb_test",
+  };
+
   it("warns on empty allowlist and missing webhook secret", () => {
     const warnings = getConfigWarnings(base);
     expect(warnings.some((w) => w.includes("WEBHOOK_SECRET"))).toBe(true);
     expect(warnings.some((w) => w.includes("ALLOWED_EMAILS"))).toBe(true);
   });
 
-  it("warns on missing auth secret and infrastructure API key separately", () => {
+  it("warns on missing Cloudflare Access config and Honeybadger key", () => {
     const warnings = getConfigWarnings({
       ...base,
       WEBHOOK_SECRET: "x",
       ALLOWED_EMAILS: "a@b.com",
-      GOOGLE_CLIENT_ID: "id",
-      GOOGLE_CLIENT_SECRET: "secret",
     });
-    expect(warnings.some((w) => w.includes("BETTER_AUTH_URL"))).toBe(true);
-    expect(warnings.some((w) => w.includes("BETTER_AUTH_SECRET"))).toBe(true);
-    expect(warnings.some((w) => w.includes("BETTER_AUTH_API_KEY"))).toBe(true);
+    expect(warnings.some((w) => w.includes("CF_ACCESS_TEAM_DOMAIN"))).toBe(true);
+    expect(warnings.some((w) => w.includes("CF_ACCESS_AUD"))).toBe(true);
     expect(warnings.some((w) => w.includes("HONEYBADGER_API_KEY"))).toBe(true);
+    expect(warnings.some((w) => w.includes("BETTER_AUTH"))).toBe(false);
+    expect(warnings.some((w) => w.includes("GOOGLE_CLIENT"))).toBe(false);
   });
 
   it("warns on invalid presence gap JSON", () => {
     const warnings = getConfigWarnings({
       ...base,
-      WEBHOOK_SECRET: "x",
-      ALLOWED_EMAILS: "a@b.com",
-      GOOGLE_CLIENT_ID: "id",
-      GOOGLE_CLIENT_SECRET: "secret",
-      BETTER_AUTH_URL: "https://example.com",
-      BETTER_AUTH_SECRET: "secret-secret-secret-secret-secret",
-      BETTER_AUTH_API_KEY: "ba_test",
-      HONEYBADGER_API_KEY: "hb_test",
+      ...accessComplete,
       PRESENCE_GAP_BY_PERSON: "{bad",
     });
     expect(warnings.some((w) => w.includes("PRESENCE_GAP_BY_PERSON"))).toBe(true);
@@ -65,14 +65,7 @@ describe("getConfigWarnings", () => {
   it("returns empty when config looks complete", () => {
     const warnings = getConfigWarnings({
       ...base,
-      WEBHOOK_SECRET: "x",
-      ALLOWED_EMAILS: "a@b.com",
-      GOOGLE_CLIENT_ID: "id",
-      GOOGLE_CLIENT_SECRET: "secret",
-      BETTER_AUTH_URL: "https://example.com",
-      BETTER_AUTH_SECRET: "secret-secret-secret-secret-secret",
-      BETTER_AUTH_API_KEY: "ba_test",
-      HONEYBADGER_API_KEY: "hb_test",
+      ...accessComplete,
     });
     expect(warnings).toEqual([]);
   });

@@ -34,9 +34,8 @@ UniFi Protect NVR (Alarm Webhook)
        │           ├─► Compute Yesterday's `presence_sessions` + `daily_person_reports`
        │           └─► Purge expired records (30 days raw / 1 yr events, reports & sessions)
        │
-       └─────────► Read-Only Web Interface (Google OAuth + ALLOWED_EMAILS)
-                   ├─► GET /login (public)
-                   ├─► GET / → /today (live dashboard from face_events)
+       └─────────► Read-Only Web Interface (Cloudflare Zero Trust Access + ALLOWED_EMAILS)
+                                      ├─► GET / → /today (live dashboard from face_events)
                    ├─► GET /api/today (JSON snapshot for 15s polling)
                    ├─► GET /people (directory by person_key)
                    ├─► GET /people/:personKey (profile)
@@ -46,8 +45,7 @@ UniFi Protect NVR (Alarm Webhook)
                    ├─► GET /api/health (diagnostics JSON)
                    ├─► GET /calendar?month=YYYY-MM&person=Name
                    ├─► GET /events?date=YYYY-MM-DD&person=Name
-                   ├─► GET /api/auth/* (better-auth)
-                   ├─► GET /api/reports?month=YYYY-MM&person=Name
+                                      ├─► GET /api/reports?month=YYYY-MM&person=Name
                    └─► GET /api/events?date=YYYY-MM-DD&person=Name
 ```
 
@@ -91,8 +89,8 @@ TIMEZONE = "America/New_York"
 TARGET_PERSON_NAMES = ""  # Optional: comma-separated names to restrict ingestion (blank = all people)
 TARGET_PERSON_IDS = ""    # Optional: comma-separated UniFi face IDs to restrict ingestion
 WATCH_CAMERA_IDS = ""     # Optional list to narrow down cameras
-ALLOWED_EMAILS = ""       # Comma-separated Google emails allowed to sign in
-BETTER_AUTH_URL = "https://unifi-protect-assistant.mrcoffee.workers.dev"
+ALLOWED_EMAILS = ""       # Shown for docs only — production uses a Worker secret
+# CF_ACCESS_TEAM_DOMAIN / CF_ACCESS_AUD are Worker secrets (not [vars])
 PRESENCE_GAP_MINUTES = "20"   # Minutes between sightings before a new presence session
 PRESENCE_GAP_BY_PERSON = ""   # Optional JSON: {"id:personKey": 45}
 PRESENCE_GAP_BY_CAMERA = ""   # Optional JSON: {"camera-id": 5} (same-camera consecutive events)
@@ -113,34 +111,20 @@ Create a `.dev.vars` file in the root directory:
 
 ```env
 WEBHOOK_SECRET=your_dev_shared_webhook_secret
-# Local only — never enable in production. Allows POST /unifi without WEBHOOK_SECRET.
-# ALLOW_INSECURE_WEBHOOKS=true
-# Optional body size cap (bytes). Default 2097152 (2 MiB).
-# MAX_WEBHOOK_BODY_BYTES=2097152
-# Experimental: store license_plate_* triggers (default false).
-# ENABLE_VEHICLE_EVENTS=true
-# App signing secret (≥32 chars). Separate from the Infrastructure API key.
-BETTER_AUTH_SECRET=generate_a_long_random_secret_at_least_32_chars
-# From your Better Auth Infrastructure project (enables dash user mgmt / analytics)
-BETTER_AUTH_API_KEY=ba_...
-# Honeybadger project API key (error reporting)
+ALLOWED_EMAILS=you@example.com,other@example.com
+CF_ACCESS_TEAM_DOMAIN=https://your-team.cloudflareaccess.com
+CF_ACCESS_AUD=your_access_application_aud_tag
 HONEYBADGER_API_KEY=your_honeybadger_api_key
-GOOGLE_CLIENT_ID=your_google_oauth_client_id
-GOOGLE_CLIENT_SECRET=your_google_oauth_client_secret
-ALLOWED_EMAILS=you@gmail.com,other@example.com
-BETTER_AUTH_URL=http://localhost:8787
+# Local UI only — never enable in production:
+# ALLOW_LOCAL_AUTH_BYPASS=true
+# ALLOW_INSECURE_WEBHOOKS=true
+# MAX_WEBHOOK_BODY_BYTES=2097152
+# ENABLE_VEHICLE_EVENTS=true
 ```
 
 > **Warning:** `ALLOW_INSECURE_WEBHOOKS=true` disables webhook authentication. Use only on localhost. Production must set `WEBHOOK_SECRET` and leave insecure mode `false`.
 
-### 3. Google OAuth redirect URIs
-
-In [Google Cloud Console](https://console.cloud.google.com/apis/credentials) → your OAuth 2.0 Client, add Authorized redirect URIs:
-
-- Production: `https://unifi-protect-assistant.mrcoffee.workers.dev/api/auth/callback/google`
-- Local: `http://localhost:8787/api/auth/callback/google`
-
-### 4. Local Migration Application
+### 3. Local Migration Application
 
 Apply the database migrations to your local development environment:
 
@@ -148,7 +132,7 @@ Apply the database migrations to your local development environment:
 npm run db:migrate:local
 ```
 
-### 5. Running the Dev Server
+### 4. Running the Dev Server
 
 Launch wrangler's local development server:
 
@@ -213,20 +197,15 @@ Set secrets on the live worker (do not commit these values):
 
 ```bash
 npx wrangler secret put WEBHOOK_SECRET
-npx wrangler secret put BETTER_AUTH_SECRET
-npx wrangler secret put BETTER_AUTH_API_KEY
+npx wrangler secret put ALLOWED_EMAILS
+npx wrangler secret put CF_ACCESS_TEAM_DOMAIN
+npx wrangler secret put CF_ACCESS_AUD
 npx wrangler secret put HONEYBADGER_API_KEY
-npx wrangler secret put GOOGLE_CLIENT_ID
-npx wrangler secret put GOOGLE_CLIENT_SECRET
 ```
-
-Create a project in the [Better Auth Infrastructure](https://www.better-auth.com/docs/infrastructure/getting-started) dashboard, copy its API key into `BETTER_AUTH_API_KEY`, and keep `BETTER_AUTH_SECRET` as a separate random signing secret. The `dash()` plugin in this Worker uses the API key to connect hosted user management, sessions, analytics, and audit logs.
 
 Set `HONEYBADGER_API_KEY` from your [Honeybadger](https://www.honeybadger.io/) project so uncaught and caught server errors (auth, webhook ingest, cron) are reported via `@honeybadger-io/cloudflare`.
 
-`ALLOWED_EMAILS` is a Worker secret (set in GitHub Actions secrets and synced on deploy), not a `[vars]` entry.
-
-`BETTER_AUTH_URL` defaults to `https://unifi-protect-assistant.mrcoffee.workers.dev` via `[vars]` in `wrangler.toml`.
+`ALLOWED_EMAILS` is a Worker secret (set in GitHub Actions secrets and synced on deploy), not a `[vars]` entry. `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` are also Worker secrets, typically synced from Access provisioning output during deploy.
 
 ### Production migrations (expand / migrate / contract)
 
@@ -269,19 +248,19 @@ Pull requests run the **quality** job only (install, typecheck, lint, format, un
 
 Add the following secrets to your GitHub Repository Settings (`Settings -> Secrets and variables -> Actions`):
 
-| GitHub secret           | Purpose                                       |
-| ----------------------- | --------------------------------------------- |
-| `CLOUDFLARE_API_TOKEN`  | Cloudflare API token (Workers, D1, KV)        |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID                         |
-| `WEBHOOK_SECRET`        | Shared secret for `POST /unifi`               |
-| `BETTER_AUTH_SECRET`    | App signing secret (≥32 chars)                |
-| `BETTER_AUTH_API_KEY`   | Better Auth Infrastructure API key (`ba_…`)   |
-| `GOOGLE_CLIENT_ID`      | Google OAuth client ID                        |
-| `GOOGLE_CLIENT_SECRET`  | Google OAuth client secret                    |
-| `ALLOWED_EMAILS`        | Comma-separated allowlisted Google emails     |
-| `HONEYBADGER_API_KEY`   | Honeybadger project API key (error reporting) |
+| GitHub secret           | Purpose                                                   |
+| ----------------------- | --------------------------------------------------------- |
+| `CLOUDFLARE_API_TOKEN`  | Cloudflare API token (Workers, D1, KV, Access Apps write) |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID                                     |
+| `WEBHOOK_SECRET`        | Shared secret for `POST /unifi`                           |
+| `ALLOWED_EMAILS`        | Comma-separated exact-email allowlist (Access + Worker)   |
+| `HONEYBADGER_API_KEY`   | Honeybadger project API key (error reporting)             |
 
-Smoke tests hit `/login`, `/ready`, auth-gated health, and `POST /unifi` without credentials (expects 401/503). They never insert biometric or plate data.
+`CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` are written to the Worker as secrets during deploy from the Access provisioning script output. They do not need to be stored as separate GitHub secrets unless you prefer to pin them.
+
+Smoke tests verify Access intercepts dashboard routes, `/ready` stays public, `/login` and `/api/auth/*` are gone, and `POST /unifi` still requires `X-Webhook-Secret`. They never insert biometric or plate data.
+
+After a successful cutover, manually delete obsolete repository secrets if present: `BETTER_AUTH_SECRET`, `BETTER_AUTH_API_KEY`, `BETTER_AUTH_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
 
 You can also re-run the workflow via `workflow_dispatch` to refresh Cloudflare secrets without a code change.
 
@@ -300,10 +279,90 @@ In the UniFi Protect controller interface under the **Alarm Manager**:
 
 ---
 
+## Authentication (Cloudflare Zero Trust Access)
+
+Dashboard routes are protected by **Cloudflare Access** at the edge and again inside the Worker.
+
+Login uses the **Cloudflare identity provider** (your existing Cloudflare account session) with instant authentication. One-time PIN email codes are not used. Access still allows only emails listed in `ALLOWED_EMAILS`.
+
+### ALLOWED_EMAILS (source of truth)
+
+Comma-separated **exact** email addresses (no wildcards, no `*@domain`, no domain-only rules):
+
+```env
+ALLOWED_EMAILS=alice@example.com,bob@example.com
+```
+
+Normalization: trim, lowercase, drop empties, dedupe. Malformed entries fail closed.
+
+The same normalized list drives:
+
+1. Cloudflare Access **Allow** policy (one exact-email rule per address)
+2. Worker JWT email authorization after cryptographic validation
+
+After changing `ALLOWED_EMAILS`, rerun Access provisioning and redeploy Worker secrets:
+
+```bash
+npm run access:configure
+# then set CF_ACCESS_AUD / CF_ACCESS_TEAM_DOMAIN from the script output
+```
+
+### Worker JWT validation
+
+Protected requests must present `Cf-Access-Jwt-Assertion`. The Worker validates RS256 via jose against JWKS at `{CF_ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs`, then checks `iss`, `aud` (`CF_ACCESS_AUD`), `exp`/`nbf`, and that `email` is in `ALLOWED_EMAILS`.
+
+Retrieve the AUD from Zero Trust → Access → Applications → UniFi Protect Assistant → Application Audience, or from `npm run access:configure` output.
+
+### `/unifi` and `/ready` path exceptions
+
+UniFi Protect cannot complete a browser Access login. A separate Access application covers **only** `…workers.dev/unifi` with **Bypass / Everyone**.
+
+A second path-scoped Bypass covers **only** `/ready` (public readiness probe; no secrets, allowlist, or PII).
+
+Bypass disables Access authentication and Access request logging for those paths. The Worker’s fail-closed `X-Webhook-Secret` validation remains mandatory on `/unifi`.
+
+### Local development
+
+Set `ALLOW_LOCAL_AUTH_BYPASS=true` in `.dev.vars` for `localhost` / `127.0.0.1` only. Never enable in production. Missing JWT is not treated as authenticated without this explicit flag.
+
+### Logout
+
+Use `/cdn-cgi/access/logout`. Session duration is 8 hours (Access policy).
+
+### Provisioning
+
+```bash
+# Dry-run (no mutations)
+CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… ALLOWED_EMAILS='alice@example.com'   node scripts/configure-cloudflare-access.mjs --dry-run
+
+# Apply
+npm run access:configure
+```
+
+`CLOUDFLARE_API_TOKEN` is a **provisioning/deployment** credential only. It is never passed to the Worker runtime.
+
+### Manual dashboard verification
+
+Zero Trust → Access controls → Applications → **UniFi Protect Assistant**:
+
+- each `ALLOWED_EMAILS` entry has an exact-email Allow rule
+- no email-domain or Everyone Allow rule
+- only the webhook app has Bypass for `/unifi`
+
+### Obsolete secrets to remove manually after cutover
+
+Remove from GitHub Actions and Cloudflare Worker secrets if still present:
+
+- `BETTER_AUTH_SECRET`
+- `BETTER_AUTH_API_KEY`
+- `BETTER_AUTH_URL`
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+
 ## Privacy & Security Disclaimer
 
-The dashboard and JSON APIs (`/`, `/calendar`, `/events`, `/api/*`) require **Google OAuth** via [better-auth](https://www.better-auth.com/). Only emails listed in `ALLOWED_EMAILS` can sign up or use an active session.
+The dashboard and JSON APIs require **Cloudflare Access**. Only emails listed in `ALLOWED_EMAILS` may authenticate (Access policy + Worker JWT check).
 
 `POST /unifi` remains separate: it uses the `X-Webhook-Secret` shared secret so UniFi Protect can post without a browser login. Requests without a configured secret fail closed with 503 unless `ALLOW_INSECURE_WEBHOOKS=true` (local only).
 
-While raw UniFi Protect payloads are not displayed publicly, authenticated users can see dates, times, camera IDs, detection thumbnails, and names of individuals detected by the system. Keep OAuth credentials and `ALLOWED_EMAILS` up to date. License-plate text is treated as sensitive personal data.
+While raw UniFi Protect payloads are not displayed publicly, authenticated users can see dates, times, camera IDs, detection thumbnails, and names of individuals detected by the system. Keep `ALLOWED_EMAILS` and Access policies up to date. License-plate text is treated as sensitive personal data.

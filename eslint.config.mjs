@@ -12,6 +12,8 @@ export default tseslint.config(
       "coverage/**",
       "fixtures/**",
       "migrations/**",
+      "scripts/**",
+      "shared/**",
     ],
   },
   js.configs.recommended,

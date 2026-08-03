@@ -249,6 +249,19 @@ export function renderHealthPage(snapshot: HealthSnapshot, nonce?: string): stri
     </div>
 
     <div class="section card">
+      <h3>Cloudflare Access</h3>
+      <p class="kv-note">
+        Configured: ${snapshot.access.configured ? "yes" : "no"} ·
+        Allowed identities: ${snapshot.access.allowlist_count}
+        ${
+          snapshot.access.last_jwt_failure_class
+            ? ` · Last JWT failure class: ${escapeHtml(snapshot.access.last_jwt_failure_class)}`
+            : ""
+        }
+      </p>
+    </div>
+
+    <div class="section card">
       <h3>Configuration warnings</h3>
       ${warningsHtml}
     </div>
