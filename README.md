@@ -113,7 +113,9 @@ id = "YOUR_KV_NAMESPACE_ID"
 
 ### 2. Local Environment Variables
 
-Create a `.dev.vars` file in the root directory:
+Copy [`.env.example`](.env.example) to `.env` (Cloudflare CLI / Access provisioning) and to `.dev.vars` (Worker secrets for `wrangler dev`). Fill in real values locally; never commit them.
+
+Example `.dev.vars`:
 
 ```env
 WEBHOOK_SECRET=your_dev_shared_webhook_secret
@@ -254,7 +256,17 @@ npm run deploy
 
 ## GitHub Actions Deployment (CI/CD)
 
-Pull requests run the **quality** job only (install, typecheck, lint, format, unit + real SQLite migration/integration tests, fresh local D1 migrate, populated-schema upgrade). Production **deploy** runs only after quality succeeds on `main`.
+Pull requests run the **quality** job only (install, typecheck, lint, format, unit + integration tests with coverage, fresh local D1 migrate, populated-schema upgrade). Coverage HTML/LCOV is uploaded as a workflow artifact. Production **deploy** runs only after quality succeeds on `main`.
+
+Dependabot opens weekly PRs for npm and GitHub Actions dependencies (npm minor/patch grouped).
+
+### Local quality gate
+
+```bash
+npm run check   # typecheck + lint + prettier + tests with coverage
+```
+
+After `npm install`, Husky installs a **pre-commit** hook that runs the same `npm run check` gate. If you previously used `.githooks` / `core.hooksPath`, re-run `npm install` so Husky owns the hooks path.
 
 Add the following secrets to your GitHub Repository Settings (`Settings -> Secrets and variables -> Actions`):
 
@@ -269,8 +281,6 @@ Add the following secrets to your GitHub Repository Settings (`Settings -> Secre
 `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` are written to the Worker as secrets during deploy from the Access provisioning script output. They do not need to be stored as separate GitHub secrets unless you prefer to pin them.
 
 Smoke tests verify Access intercepts dashboard routes, `/ready` stays public, `/login` and `/api/auth/*` are gone, and `POST /unifi` still requires `X-Webhook-Secret`. They never insert biometric or plate data.
-
-After a successful cutover, manually delete obsolete repository secrets if present: `BETTER_AUTH_SECRET`, `BETTER_AUTH_API_KEY`, `BETTER_AUTH_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
 
 You can also re-run the workflow via `workflow_dispatch` to refresh Cloudflare secrets without a code change.
 
@@ -358,16 +368,6 @@ Zero Trust → Access controls → Applications → **UniFi Protect Assistant**:
 - each `ALLOWED_EMAILS` entry has an exact-email Allow rule
 - no email-domain or Everyone Allow rule
 - only the webhook app has Bypass for `/unifi`
-
-### Obsolete secrets to remove manually after cutover
-
-Remove from GitHub Actions and Cloudflare Worker secrets if still present:
-
-- `BETTER_AUTH_SECRET`
-- `BETTER_AUTH_API_KEY`
-- `BETTER_AUTH_URL`
-- `GOOGLE_CLIENT_ID`
-- `GOOGLE_CLIENT_SECRET`
 
 ## Privacy & Security Disclaimer
 

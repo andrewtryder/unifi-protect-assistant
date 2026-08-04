@@ -13,9 +13,10 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "test:integration": "vitest run tests/*.integration.test.ts",
-    "check": "npm run typecheck && npm run lint && npm run format:check && npm run test",
-    "prepare": "git config core.hooksPath .githooks || true",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm run test:coverage",
+    "prepare": "husky",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:prod": "wrangler d1 migrations apply DB --remote",
     "access:configure": "node scripts/configure-cloudflare-access.mjs"
@@ -23,8 +24,10 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240529.0",
     "@eslint/js": "^10.0.1",
+    "@vitest/coverage-v8": "^1.6.1",
     "eslint": "^10.7.0",
     "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
     "prettier": "^3.9.5",
     "typescript": "^5.4.5",
     "typescript-eslint": "^8.64.0",
