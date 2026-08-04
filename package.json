@@ -26,17 +26,17 @@
     "@cloudflare/workers-types": "^4.20240529.0",
     "@eslint/js": "^10.0.1",
     "@vitest/coverage-v8": "^1.6.1",
-    "eslint": "^10.7.0",
+    "eslint": "^10.8.0",
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
-    "prettier": "^3.9.5",
+    "prettier": "^3.9.6",
     "typescript": "^5.4.5",
-    "typescript-eslint": "^8.64.0",
+    "typescript-eslint": "^8.65.0",
     "vitest": "^1.6.0",
-    "wrangler": "^4.107.0"
+    "wrangler": "^4.118.0"
   },
   "dependencies": {
-    "@honeybadger-io/cloudflare": "^0.3.3",
+    "@honeybadger-io/cloudflare": "^0.3.8",
     "jose": "^6.2.8"
   }
 }
