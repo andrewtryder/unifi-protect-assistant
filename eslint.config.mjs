@@ -14,6 +14,7 @@ export default tseslint.config(
       "migrations/**",
       "scripts/**",
       "shared/**",
+      "public/**",
     ],
   },
   js.configs.recommended,

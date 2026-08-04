@@ -145,7 +145,7 @@
       if (!res.ok) return;
       var data = await res.json();
       applySnapshot(data);
-    } catch (e) {
+    } catch (_e) {
       /* keep last good frame */
     }
   }
