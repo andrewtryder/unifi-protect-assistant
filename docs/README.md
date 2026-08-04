@@ -4,6 +4,7 @@ Operational details live here. Start with the [root README](../README.md) for th
 
 | Document                                               | Description                           |
 | ------------------------------------------------------ | ------------------------------------- |
+| [../CONTRIBUTING.md](../CONTRIBUTING.md)               | PR titles, local checks, CI           |
 | [deployment.md](deployment.md)                         | CI/CD, secrets, migrations, backups   |
 | [cloudflare-access.md](cloudflare-access.md)           | Access allowlist, JWT, path bypasses  |
 | [unifi-webhooks.md](unifi-webhooks.md)                 | Protect alarms, webhook status codes  |

@@ -1,12 +1,18 @@
 # Deployment
 
-Production runs on Cloudflare Workers with D1, KV, Cloudflare Access, and a daily cron. Prefer the GitHub Actions workflow on `main` after the quality job succeeds.
+Production runs on Cloudflare Workers with D1, KV, Cloudflare Access, and a daily cron. Prefer the GitHub Actions **Deploy** workflow on `main` after its `quality` job succeeds.
 
 ## GitHub Actions
 
-On pull requests, the **quality** job runs install, typecheck, lint, Prettier, tests with coverage (artifact uploaded), local D1 migrate, and selected integration checks.
+| Workflow           | When                                 | What                                                                                                                                                                      |
+| ------------------ | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **CI**             | PRs and pushes to `main`             | `quality`: install, typecheck, lint, Prettier, tests + coverage thresholds, coverage artifact, `wrangler deploy --dry-run`, local D1 migrate, selected integration checks |
+| **Deploy**         | Push to `main` / `workflow_dispatch` | Re-runs `quality`, then Access provisioning, remote D1 migrate, Worker deploy, smoke, optional rollback                                                                   |
+| **PR title**       | PR open/edit                         | Conventional Commits title check (squash-oriented)                                                                                                                        |
+| **Actions lint**   | Workflow file changes                | `actionlint` + `zizmor`                                                                                                                                                   |
+| **Release Please** | Push to `main`                       | Changelog + version PR / GitHub Release (no npm publish)                                                                                                                  |
 
-On `main` (and `workflow_dispatch`), **deploy** provisions Access from `ALLOWED_EMAILS`, applies remote D1 migrations, deploys the Worker (syncing secrets), runs smoke checks, and can roll back the Worker if smoke fails after a successful deploy.
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for PR title conventions. Prefer enabling GitHub **CodeQL default setup** in repository Settings → Code security.
 
 ### Repository secrets
 
