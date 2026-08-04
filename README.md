@@ -162,12 +162,15 @@ npm run db:migrate:local
 
 Husky runs `npm run check` on pre-commit after `npm install` / `npm ci`.
 
+Pull requests use Conventional Commit titles (squash merge). See [CONTRIBUTING.md](CONTRIBUTING.md). Required checks: `quality`, `PR title`, and `actions-lint` when workflows change.
+
 Troubleshooting common webhook, Access, and UI gaps: [docs/troubleshooting.md](docs/troubleshooting.md).
 
 ## Documentation
 
 | Doc                                                      | Topic                                   |
 | -------------------------------------------------------- | --------------------------------------- |
+| [Contributing](CONTRIBUTING.md)                          | PR titles, local checks, CI             |
 | [Deployment](docs/deployment.md)                         | CI/CD, secrets, migrations, backups     |
 | [Cloudflare Access](docs/cloudflare-access.md)           | Allowlist, JWT checks, path bypasses    |
 | [UniFi webhooks](docs/unifi-webhooks.md)                 | Alarm setup, status codes, vehicles     |

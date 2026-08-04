@@ -1,7 +1,6 @@
-name: CI and Deploy
+name: Deploy
 
 on:
-  pull_request:
   push:
     branches:
       - main
@@ -9,19 +8,23 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
   quality:
+    name: quality
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -47,9 +50,12 @@ jobs:
       - name: Upload coverage artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: coverage
+          name: coverage-deploy
           path: coverage/
           if-no-files-found: error
+
+      - name: Wrangler dry-run build
+        run: npx wrangler deploy --dry-run
 
       - name: Apply all migrations to a fresh local D1 database
         run: npm run db:migrate:local
@@ -58,9 +64,10 @@ jobs:
         run: npx vitest run tests/retention.integration.test.ts tests/betterAuthRemoval.integration.test.ts
 
   deploy:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    name: deploy
     needs: quality
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -70,12 +77,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-          cache: "npm"
+          # Deploy publishes the Worker; disable setup-node caching to avoid cache-poisoning risk.
+          package-manager-cache: false
 
       - name: Install dependencies
         run: npm ci
@@ -104,11 +114,13 @@ jobs:
           echo "team_domain=${TEAM}" >> "$GITHUB_OUTPUT"
 
       - name: Verify Access provisioning is idempotent
+        env:
+          ACCESS_AUD: ${{ steps.access.outputs.aud }}
         run: |
           set +x
           node scripts/configure-cloudflare-access.mjs | tee /tmp/access-configure-2.out
           grep -qi 'no-op\|unchanged\|already in sync\|idempotent' /tmp/access-configure-2.out || \
-            grep -q "CF_ACCESS_AUD=${{ steps.access.outputs.aud }}" /tmp/access-configure-2.out
+            grep -q "CF_ACCESS_AUD=${ACCESS_AUD}" /tmp/access-configure-2.out
 
       - name: Apply D1 migrations (remote)
         id: migrate
