@@ -25,14 +25,14 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240529.0",
     "@eslint/js": "^10.0.1",
-    "@vitest/coverage-v8": "^1.6.1",
+    "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^10.8.0",
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
     "prettier": "^3.9.6",
     "typescript": "^5.4.5",
     "typescript-eslint": "^8.65.0",
-    "vitest": "^1.6.0",
+    "vitest": "^4.1.10",
     "wrangler": "^4.118.0"
   },
   "dependencies": {
