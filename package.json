@@ -23,7 +23,7 @@
     "access:configure": "node scripts/configure-cloudflare-access.mjs"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20240529.0",
+    "@cloudflare/workers-types": "^5.20260801.1",
     "@eslint/js": "^10.0.1",
     "@vitest/coverage-v8": "^1.6.1",
     "eslint": "^10.7.0",
