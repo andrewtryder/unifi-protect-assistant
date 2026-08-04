@@ -19,7 +19,7 @@ export function buildPersonQueryString(
 
 /**
  * Renders a styled person-selector dropdown that navigates on change,
- * preserving the current month/date param.
+ * preserving the current month/date param. Change handling lives in /assets/app.js.
  */
 export function renderPeopleFilter(
   people: PersonSummary[],
@@ -43,54 +43,15 @@ export function renderPeopleFilter(
   return `
     <div class="people-filter">
       <label for="person-filter" class="people-filter-label">Person</label>
-      <select id="person-filter" class="people-filter-select" onchange="onPersonFilterChange(this)">
+      <select
+        id="person-filter"
+        class="people-filter-select"
+        data-base-path="${escapeHtml(basePath)}"
+        data-extra-param="${escapeHtml(extraParamName)}"
+        data-extra-value="${escapeHtml(extraParamValue)}"
+      >
         ${options}
       </select>
     </div>
-    <script>
-      function onPersonFilterChange(select) {
-        const params = new URLSearchParams();
-        params.set(${JSON.stringify(extraParamName)}, ${JSON.stringify(extraParamValue)});
-        if (select.value) {
-          params.set("person", select.value);
-        }
-        window.location.href = ${JSON.stringify(basePath)} + "?" + params.toString();
-      }
-    </script>
   `;
 }
-
-export const peopleFilterStyles = `
-  .people-filter {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-  .people-filter-label {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-  .people-filter-select {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 0.5rem 0.75rem;
-    border-radius: 8px;
-    font-family: var(--font);
-    font-size: 0.9rem;
-    font-weight: 500;
-    cursor: pointer;
-    min-width: 180px;
-    transition: all 0.2s ease;
-  }
-  .people-filter-select:hover {
-    border-color: var(--border-strong);
-  }
-  .people-filter-select:focus {
-    border-color: var(--accent);
-    outline: none;
-  }
-`;

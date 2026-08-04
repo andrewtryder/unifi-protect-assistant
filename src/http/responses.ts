@@ -4,8 +4,6 @@ export interface SecurityHeaderOptions {
   kind: ResponseKind;
   /** Authenticated biometric / private pages and APIs */
   noStore?: boolean;
-  /** CSP nonce for inline style/script when provided */
-  nonce?: string;
   /** Extra headers to merge */
   extra?: HeadersInit;
 }
@@ -19,13 +17,12 @@ const PERMISSIONS_POLICY = [
   "interest-cohort=()",
 ].join(", ");
 
-/** CSP without unsafe-eval; scripts/styles may use nonce when supplied. */
-export function buildContentSecurityPolicy(nonce?: string): string {
-  const nonceSrc = nonce ? ` 'nonce-${nonce}'` : "";
+/** Strict CSP: external assets only — no unsafe-inline / unsafe-eval / nonces. */
+export function buildContentSecurityPolicy(): string {
   return [
     "default-src 'none'",
-    `script-src 'self'${nonceSrc}`,
-    `style-src 'self'${nonceSrc}`,
+    "script-src 'self'",
+    "style-src 'self'",
     "img-src 'self' data:",
     "font-src 'self'",
     "connect-src 'self'",
@@ -40,7 +37,7 @@ export function securityHeaders(options: SecurityHeaderOptions): Headers {
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("Referrer-Policy", "no-referrer");
   headers.set("Permissions-Policy", PERMISSIONS_POLICY);
-  headers.set("Content-Security-Policy", buildContentSecurityPolicy(options.nonce));
+  headers.set("Content-Security-Policy", buildContentSecurityPolicy());
   headers.set("X-Frame-Options", "DENY");
 
   if (options.noStore) {
@@ -60,13 +57,12 @@ export function securityHeaders(options: SecurityHeaderOptions): Headers {
 
 export function htmlResponse(
   body: string,
-  init?: { status?: number; nonce?: string; noStore?: boolean; extra?: HeadersInit }
+  init?: { status?: number; noStore?: boolean; extra?: HeadersInit }
 ): Response {
   return new Response(body, {
     status: init?.status ?? 200,
     headers: securityHeaders({
       kind: "html",
-      nonce: init?.nonce,
       noStore: init?.noStore ?? true,
       extra: init?.extra,
     }),
@@ -75,13 +71,12 @@ export function htmlResponse(
 
 export function jsonResponse(
   body: unknown,
-  init?: { status?: number; nonce?: string; noStore?: boolean; extra?: HeadersInit }
+  init?: { status?: number; noStore?: boolean; extra?: HeadersInit }
 ): Response {
   return new Response(JSON.stringify(body), {
     status: init?.status ?? 200,
     headers: securityHeaders({
       kind: "json",
-      nonce: init?.nonce,
       noStore: init?.noStore ?? true,
       extra: init?.extra,
     }),
@@ -116,10 +111,4 @@ export function genericErrorResponse(
   extra?: HeadersInit
 ): Response {
   return jsonResponse({ error: publicMessage }, { status, extra, noStore: true });
-}
-
-export function newRequestNonce(): string {
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }

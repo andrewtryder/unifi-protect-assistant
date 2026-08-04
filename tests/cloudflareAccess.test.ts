@@ -308,7 +308,7 @@ describe("tryLocalAuthBypass", () => {
 
 describe("requireAccessAuth", () => {
   it("returns generic JSON errors without JWT or email leakage", async () => {
-    const gate = await requireAccessAuth(assertionRequest(), baseEnv(), "json", "nonce", "req-1");
+    const gate = await requireAccessAuth(assertionRequest(), baseEnv(), "json", "req-1");
     expect(gate.ok).toBe(false);
     if (gate.ok) return;
     expect(gate.response.status).toBe(401);
@@ -320,13 +320,7 @@ describe("requireAccessAuth", () => {
 
   it("returns generic HTML denied page without email leakage", async () => {
     const token = await signToken({ email: "stranger@example.com" });
-    const gate = await requireAccessAuth(
-      assertionRequest(token),
-      baseEnv(),
-      "html",
-      "nonce",
-      "req-2"
-    );
+    const gate = await requireAccessAuth(assertionRequest(token), baseEnv(), "html", "req-2");
     expect(gate.ok).toBe(false);
     if (gate.ok) return;
     expect(gate.response.status).toBe(403);
@@ -341,7 +335,6 @@ describe("requireAccessAuth", () => {
       new Request("http://127.0.0.1:8787/"),
       baseEnv({ ALLOW_LOCAL_AUTH_BYPASS: "true" }),
       "json",
-      "nonce",
       "req-3"
     );
     expect(gate.ok).toBe(true);
@@ -354,7 +347,6 @@ describe("requireAccessAuth", () => {
       new Request("https://prod.example.com/"),
       baseEnv({ ALLOW_LOCAL_AUTH_BYPASS: "true" }),
       "json",
-      "nonce",
       "req-4"
     );
     expect(gate.ok).toBe(false);

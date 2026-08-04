@@ -27,7 +27,7 @@ function formatAge(ms: number | null, nowMs: number): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-export function renderHealthPage(snapshot: HealthSnapshot, nonce?: string): string {
+export function renderHealthPage(snapshot: HealthSnapshot): string {
   const now = snapshot.generated_at_ms;
   const healthClass = snapshot.webhook_healthy ? "badge-accent" : "badge";
   const healthLabel = snapshot.webhook_healthy ? "Healthy" : "Stale / quiet";
@@ -35,7 +35,7 @@ export function renderHealthPage(snapshot: HealthSnapshot, nonce?: string): stri
 
   const warningsHtml =
     snapshot.config_warnings.length === 0
-      ? `<p style="color:var(--text-muted);">No configuration warnings.</p>`
+      ? `<p class="text-muted">No configuration warnings.</p>`
       : `<ul class="warn-list">${snapshot.config_warnings
           .map((w) => `<li>${escapeHtml(w)}</li>`)
           .join("")}</ul>`;
@@ -47,97 +47,38 @@ export function renderHealthPage(snapshot: HealthSnapshot, nonce?: string): stri
     : "—";
 
   const body = `
-    <style>
-      .page-header { margin-bottom: 1.5rem; }
-      .page-header h2 {
-        font-family: var(--font);
-        font-size: 1.75rem;
-        font-weight: 700;
-      }
-      .page-header p { color: var(--text-muted); font-size: 0.9rem; margin-top: 0.35rem; }
-      .summary-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-        gap: 1rem;
-        margin-bottom: 1.5rem;
-      }
-      .summary-card { padding: 1.1rem 1.2rem; }
-      .summary-card .label {
-        font-size: 0.7rem;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--text-muted);
-        font-weight: 600;
-        margin-bottom: 0.35rem;
-      }
-      .summary-card .value {
-        font-family: var(--font);
-        font-size: 1.25rem;
-        font-weight: 700;
-      }
-      .summary-card .sub {
-        margin-top: 0.25rem;
-        font-size: 0.75rem;
-        color: var(--text-muted);
-      }
-      .section { margin-bottom: 1.5rem; }
-      .section h3 {
-        font-family: var(--font);
-        font-size: 1.05rem;
-        font-weight: 600;
-        margin-bottom: 0.75rem;
-      }
-      .warn-list {
-        margin: 0;
-        padding-left: 1.25rem;
-        color: var(--warning);
-        line-height: 1.6;
-      }
-      .kv-note {
-        font-size: 0.8rem;
-        color: var(--text-muted);
-        margin-top: 0.75rem;
-      }
-      .error-box {
-        color: var(--danger);
-        font-size: 0.85rem;
-        margin-top: 0.5rem;
-        word-break: break-word;
-      }
-    </style>
-
     <div class="page-header">
       <h2>Health</h2>
       <p>Diagnostics for ${escapeHtml(snapshot.local_date)} · America/New_York · snapshot ${formatWhen(now)}</p>
     </div>
 
-    <div class="summary-grid">
+    <div class="summary-grid wide">
       <div class="card summary-card">
         <div class="label">Webhook status</div>
-        <div class="value"><span class="badge ${healthClass}">${healthLabel}</span></div>
+        <div class="value health"><span class="badge ${healthClass}">${healthLabel}</span></div>
         <div class="sub">Last ${formatAge(snapshot.last_webhook_at_ms, now)}</div>
       </div>
       <div class="card summary-card">
         <div class="label">Last webhook</div>
-        <div class="value" style="font-size:0.95rem;">${formatWhen(snapshot.last_webhook_at_ms)}</div>
+        <div class="value value-sm">${formatWhen(snapshot.last_webhook_at_ms)}</div>
       </div>
       <div class="card summary-card">
         <div class="label">Last event</div>
-        <div class="value" style="font-size:0.95rem;">${formatWhen(snapshot.last_event_at_ms)}</div>
+        <div class="value value-sm">${formatWhen(snapshot.last_event_at_ms)}</div>
         <div class="sub">${formatAge(snapshot.last_event_at_ms, now)}</div>
       </div>
       <div class="card summary-card">
         <div class="label">Events 1h / 24h</div>
-        <div class="value">${snapshot.events_last_hour} / ${snapshot.events_last_day}</div>
+        <div class="value health">${snapshot.events_last_hour} / ${snapshot.events_last_day}</div>
       </div>
       <div class="card summary-card">
         <div class="label">Webhooks 1h / 24h</div>
-        <div class="value">${snapshot.webhooks_last_hour} / ${snapshot.webhooks_last_day}</div>
+        <div class="value health">${snapshot.webhooks_last_hour} / ${snapshot.webhooks_last_day}</div>
       </div>
     </div>
 
     <div class="section card">
-      <h3>Today’s ingest counters <span style="color:var(--text-muted);font-weight:400;font-size:0.85rem;">(D1 · local day)</span></h3>
+      <h3>Today’s ingest counters <span class="text-muted-sm">(D1 · local day)</span></h3>
       <div class="table-container">
         <table>
           <thead>
@@ -199,7 +140,7 @@ export function renderHealthPage(snapshot: HealthSnapshot, nonce?: string): stri
               <td>${formatWhen(snapshot.last_cron_report_at_ms)}</td>
               <td>${snapshot.last_cron_report_date ? escapeHtml(snapshot.last_cron_report_date) : "—"}</td>
               <td>${formatWhen(snapshot.last_cleanup_at_ms)}</td>
-              <td style="white-space:normal;font-size:0.85rem;">${escapeHtml(cleanupSummary)}</td>
+              <td class="cell-wrap">${escapeHtml(cleanupSummary)}</td>
             </tr>
           </tbody>
         </table>
@@ -222,7 +163,7 @@ export function renderHealthPage(snapshot: HealthSnapshot, nonce?: string): stri
     </div>
 
     <div class="section card">
-      <h3>Database usage <span style="color:var(--text-muted);font-weight:400;font-size:0.85rem;">(row counts)</span></h3>
+      <h3>Database usage <span class="text-muted-sm">(row counts)</span></h3>
       <div class="table-container">
         <table>
           <thead>
@@ -267,5 +208,5 @@ export function renderHealthPage(snapshot: HealthSnapshot, nonce?: string): stri
     </div>
   `;
 
-  return renderLayout("Health", body, { nonce });
+  return renderLayout("Health", body);
 }

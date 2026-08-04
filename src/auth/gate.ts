@@ -19,7 +19,6 @@ export async function requireAccessAuth(
   request: Request,
   env: Env,
   mode: "html" | "json",
-  nonce: string,
   requestId: string
 ): Promise<AuthGate> {
   try {
@@ -71,9 +70,8 @@ export async function requireAccessAuth(
 
     return {
       ok: false,
-      response: htmlResponse(renderAccessDenied(nonce), {
+      response: htmlResponse(renderAccessDenied(), {
         status: 403,
-        nonce,
         extra: withRequestIdHeader(undefined, requestId),
       }),
     };

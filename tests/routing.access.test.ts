@@ -260,8 +260,10 @@ describe("Access routing gate", () => {
   });
 
   it("points Sign out at Cloudflare Access logout", () => {
-    const html = renderLayout("Test", "<p>body</p>", { nonce: "nonce" });
+    const html = renderLayout("Test", "<p>body</p>");
     expect(html).toContain('href="/cdn-cgi/access/logout"');
+    expect(html).toContain('href="/assets/app.css"');
+    expect(html).toContain('src="/assets/app.js"');
     expect(html).not.toMatch(/\/api\/auth|better-auth/i);
   });
 });
