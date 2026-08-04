@@ -17,7 +17,7 @@ PRESENCE_GAP_BY_PERSON = ""
 PRESENCE_GAP_BY_CAMERA = ""
 
 # Vehicle/license-plate ingestion is experimental and off by default.
-ENABLE_VEHICLE_EVENTS = "false"
+ENABLE_VEHICLE_EVENTS = "true"
 # Never set ALLOW_INSECURE_WEBHOOKS or ALLOW_LOCAL_AUTH_BYPASS in production.
 ALLOW_INSECURE_WEBHOOKS = "false"
 MAX_WEBHOOK_BODY_BYTES = "2097152"
@@ -33,3 +33,7 @@ id = "c66e834e4d7b484cb5eef270ee92493e"
 
 [triggers]
 crons = ["0 6 * * *"] # 6:00 AM UTC ≈ 2:00 AM ET
+
+# Static CSS/JS served before the Worker when the path matches (no run_worker_first).
+[assets]
+directory = "./public"
