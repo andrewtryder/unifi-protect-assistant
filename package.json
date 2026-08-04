@@ -1,7 +1,8 @@
 {
   "name": "unifi-protect-assistant",
   "version": "1.0.0",
-  "description": "Normalized person/face recognition storage and dashboard served from Cloudflare Workers + D1",
+  "description": "Private Cloudflare Workers dashboard for UniFi Protect face and vehicle events, reporting, and presence tracking",
+  "license": "MIT",
   "main": "src/index.ts",
   "scripts": {
     "dev": "wrangler dev",
