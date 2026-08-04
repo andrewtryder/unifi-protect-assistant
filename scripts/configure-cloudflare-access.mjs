@@ -26,7 +26,7 @@ export const WEBHOOK_POLICY_NAME = "Webhook Path Bypass";
 export const READY_APP_NAME = "UniFi Protect Assistant Ready Bypass";
 export const READY_POLICY_NAME = "Ready Path Bypass";
 export const WORKER_SCRIPT_NAME = "unifi-protect-assistant";
-export const SESSION = "8h";
+export const SESSION = "24h";
 export const API_BASE = "https://api.cloudflare.com/client/v4";
 
 export class CloudflareApiError extends Error {
@@ -104,23 +104,25 @@ export function buildDashboardPolicyInclude(emails) {
 }
 
 /**
- * @param {string} workerId
+ * @param {string} hostname workers.dev hostname without scheme/path
  * @param {string[]} emails
  * @param {{ auto_redirect_to_identity: boolean, allowed_idps?: string[] }} [identity]
  */
 export function buildDashboardAppBody(
-  workerId,
+  hostname,
   emails,
   identity = { auto_redirect_to_identity: false }
 ) {
+  const host = normalizePublicUri(hostname);
   /** @type {Record<string, unknown>} */
   const body = {
     name: DASHBOARD_APP_NAME,
     type: "self_hosted",
+    domain: host,
     session_duration: SESSION,
     auto_redirect_to_identity: identity.auto_redirect_to_identity === true,
     app_launcher_visible: false,
-    destinations: [{ type: "worker", worker_id: workerId }],
+    destinations: [{ type: "public", uri: host }],
     policies: [
       {
         name: DASHBOARD_POLICY_NAME,
@@ -136,8 +138,8 @@ export function buildDashboardAppBody(
 }
 
 /**
- * Instant auth only when a single suitable IdP can be selected.
- * Prefer Cloudflare-as-IdP (existing Cloudflare account session) over OTP/email codes.
+ * Instant auth IdP selection matching sunsethue-helper:
+ * prefer Cloudflare, else One-time PIN. Do not prefer Google.
  * @param {unknown[]} idps
  */
 export function resolveInstantAuthOptions(idps) {
@@ -156,10 +158,11 @@ export function resolveInstantAuthOptions(idps) {
       allowed_idps: [String(/** @type {Record<string, unknown>} */ (cloudflareIdp).id)],
     };
   }
-  if (list.length === 1) {
+  const otp = list.find((p) => /** @type {Record<string, unknown>} */ (p).type === "onetimepin");
+  if (otp) {
     return {
       auto_redirect_to_identity: true,
-      allowed_idps: [String(/** @type {Record<string, unknown>} */ (list[0]).id)],
+      allowed_idps: [String(/** @type {Record<string, unknown>} */ (otp).id)],
     };
   }
   return { auto_redirect_to_identity: false };
@@ -404,12 +407,13 @@ export function dashboardPolicyHasUnsafeRules(policy) {
 }
 
 /**
- * Find dashboard app: exact name AND worker destination matching worker_id.
- * Refuse if same name but different destination.
+ * Find dashboard app by stable name + public hostname (sunsethue style).
+ * Also accepts a legacy worker-destination app with this name so it can be migrated.
  * @param {unknown[]} apps
- * @param {string} workerId
+ * @param {string} hostname
  */
-export function findDashboardApp(apps, workerId) {
+export function findDashboardApp(apps, hostname) {
+  const host = normalizePublicUri(hostname);
   const named = (apps || []).filter(
     (a) =>
       a &&
@@ -418,19 +422,38 @@ export function findDashboardApp(apps, workerId) {
   );
   if (named.length === 0) return null;
 
-  const matching = named.filter((a) =>
-    workerDestinationMatches(/** @type {Record<string, unknown>} */ (a).destinations, workerId)
-  );
-  if (matching.length === 1) return matching[0];
-  if (matching.length > 1) {
+  const matchingPublic = named.filter((a) => {
+    const app = /** @type {Record<string, unknown>} */ (a);
+    if (publicUriMatches(app.destinations, host)) return true;
+    if (typeof app.domain === "string" && normalizePublicUri(app.domain) === host) return true;
+    return false;
+  });
+  if (matchingPublic.length === 1) return matchingPublic[0];
+  if (matchingPublic.length > 1) {
     throw new ConfigureAccessError(
-      `Multiple dashboard apps named "${DASHBOARD_APP_NAME}" with worker_id match`,
+      `Multiple dashboard apps named "${DASHBOARD_APP_NAME}" with hostname match`,
       "AMBIGUOUS_DASHBOARD_APP"
     );
   }
-  // Same name, wrong destination
+
+  // Migrate legacy worker-destination app in place when it is the only named match.
+  const legacyWorker = named.filter((a) => {
+    const dest = /** @type {Record<string, unknown>} */ (a).destinations;
+    if (!Array.isArray(dest)) return false;
+    const hasWorker = dest.some(
+      (d) =>
+        d && typeof d === "object" && /** @type {Record<string, unknown>} */ (d).type === "worker"
+    );
+    const hasPublic = dest.some(
+      (d) =>
+        d && typeof d === "object" && /** @type {Record<string, unknown>} */ (d).type === "public"
+    );
+    return hasWorker && !hasPublic;
+  });
+  if (legacyWorker.length === 1 && named.length === 1) return legacyWorker[0];
+
   throw new ConfigureAccessError(
-    `Access app "${DASHBOARD_APP_NAME}" exists but destination does not match worker_id=${workerId}`,
+    `Access app "${DASHBOARD_APP_NAME}" exists but destination does not match hostname=${host}`,
     "DASHBOARD_NAME_DEST_CONFLICT"
   );
 }
@@ -482,22 +505,26 @@ export function findReadyApp(apps, readyUri) {
 /**
  * Compare dashboard app settings (excluding policies).
  * @param {Record<string, unknown>} existing
- * @param {string} workerId
+ * @param {string} hostname
  * @param {{ auto_redirect_to_identity: boolean, allowed_idps?: string[] }} [identity]
  */
 export function dashboardSettingsMatch(
   existing,
-  workerId,
+  hostname,
   identity = { auto_redirect_to_identity: false }
 ) {
   const wantRedirect = identity.auto_redirect_to_identity === true;
+  const host = normalizePublicUri(hostname);
+  const domainOk =
+    typeof existing.domain === "string" ? normalizePublicUri(existing.domain) === host : true;
   if (
     existing.name !== DASHBOARD_APP_NAME ||
     existing.type !== "self_hosted" ||
     existing.session_duration !== SESSION ||
     existing.auto_redirect_to_identity !== wantRedirect ||
     existing.app_launcher_visible !== false ||
-    !workerDestinationMatches(existing.destinations, workerId)
+    !publicUriMatches(existing.destinations, host) ||
+    !domainOk
   ) {
     return false;
   }
@@ -809,14 +836,23 @@ export async function configureAccess({ config, dryRun = false, client, log = co
   }
   if (dryRun) safeLog("mode=dry-run (no mutations)");
 
-  // 1–2. Org + worker id
+  // 1–2. Org + hostname
   const org = await cf.getOrganization();
   const teamDomain = resolveTeamDomain(org, config.teamDomainOverride);
   safeLog(`team_domain=${teamDomain}`);
+  safeLog(`worker_hostname=${config.workerHostname}`);
 
-  const scripts = await cf.listWorkerScripts();
-  const workerId = resolveWorkerId(scripts, config.workerName);
-  safeLog(`worker_id=${workerId}`);
+  // Worker script tag is diagnostic only (destination is public hostname).
+  let workerId = null;
+  try {
+    const scripts = await cf.listWorkerScripts();
+    workerId = resolveWorkerId(scripts, config.workerName);
+    safeLog(`worker_id=${workerId}`);
+  } catch (err) {
+    safeLog(
+      `note: worker script lookup skipped (${err instanceof Error ? err.message : "unavailable"})`
+    );
+  }
 
   const apps = await cf.listAccessApps();
   const idps =
@@ -825,15 +861,15 @@ export async function configureAccess({ config, dryRun = false, client, log = co
   if (identity.auto_redirect_to_identity) {
     safeLog("identity: instant auth enabled for a single suitable IdP");
   } else {
-    safeLog("identity: multiple IdPs present — instant auth disabled");
+    safeLog("identity: no Cloudflare/OTP IdP — instant auth disabled");
   }
 
   // --- Dashboard app ---
   let dashboardApp = null;
   let dashboardAud = null;
   try {
-    const existing = findDashboardApp(apps, workerId);
-    const desired = buildDashboardAppBody(workerId, config.emails, identity);
+    const existing = findDashboardApp(apps, config.workerHostname);
+    const desired = buildDashboardAppBody(config.workerHostname, config.emails, identity);
 
     if (!existing) {
       planned.push("create_dashboard_app");
@@ -864,7 +900,7 @@ export async function configureAccess({ config, dryRun = false, client, log = co
         );
       }
 
-      const settingsOk = dashboardSettingsMatch(dashboardApp, workerId, identity);
+      const settingsOk = dashboardSettingsMatch(dashboardApp, config.workerHostname, identity);
       const policyOk = !dashboardPolicyNeedsUpdate(
         /** @type {Record<string, unknown> | null} */ (allowPolicy),
         config.emails
