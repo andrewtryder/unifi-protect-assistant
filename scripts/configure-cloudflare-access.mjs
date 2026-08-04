@@ -441,10 +441,12 @@ export function findDashboardApp(apps, hostname) {
     const dest = /** @type {Record<string, unknown>} */ (a).destinations;
     if (!Array.isArray(dest)) return false;
     const hasWorker = dest.some(
-      (d) => d && typeof d === "object" && /** @type {Record<string, unknown>} */ (d).type === "worker"
+      (d) =>
+        d && typeof d === "object" && /** @type {Record<string, unknown>} */ (d).type === "worker"
     );
     const hasPublic = dest.some(
-      (d) => d && typeof d === "object" && /** @type {Record<string, unknown>} */ (d).type === "public"
+      (d) =>
+        d && typeof d === "object" && /** @type {Record<string, unknown>} */ (d).type === "public"
     );
     return hasWorker && !hasPublic;
   });
