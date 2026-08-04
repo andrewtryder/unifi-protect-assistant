@@ -283,7 +283,7 @@ In the UniFi Protect controller interface under the **Alarm Manager**:
 
 Dashboard routes are protected by **Cloudflare Access** at the edge and again inside the Worker.
 
-Login uses the **Cloudflare identity provider** (your existing Cloudflare account session) with instant authentication. One-time PIN email codes are not used. Access still allows only emails listed in `ALLOWED_EMAILS`.
+Login uses the **Cloudflare** Access identity provider with instant authentication (same pattern as sunsethue-helper), protecting the public Worker hostname. One-time PIN is only a fallback when Cloudflare IdP is absent. Access still allows only emails listed in `ALLOWED_EMAILS`.
 
 ### ALLOWED_EMAILS (source of truth)
 

@@ -295,26 +295,35 @@ describe("policy helpers", () => {
 });
 
 describe("findDashboardApp / findWebhookApp", () => {
-  it("refuses same name different destination", () => {
+  it("refuses same name different public hostname", () => {
     expect(() =>
       findDashboardApp(
         [
           {
             name: DASHBOARD_APP_NAME,
-            destinations: [{ type: "worker", worker_id: "other" }],
+            destinations: [{ type: "public", uri: "other.workers.dev" }],
           },
         ],
-        WORKER_ID
+        HOST
       )
     ).toThrow(/destination does not match/);
   });
 
-  it("finds matching worker destination", () => {
+  it("finds matching public hostname destination", () => {
+    const app = {
+      name: DASHBOARD_APP_NAME,
+      domain: HOST,
+      destinations: [{ type: "public", uri: HOST }],
+    };
+    expect(findDashboardApp([app], HOST)).toBe(app);
+  });
+
+  it("accepts legacy worker-destination app for migration", () => {
     const app = {
       name: DASHBOARD_APP_NAME,
       destinations: [{ type: "worker", worker_id: WORKER_ID }],
     };
-    expect(findDashboardApp([app], WORKER_ID)).toBe(app);
+    expect(findDashboardApp([app], HOST)).toBe(app);
   });
 
   it("refuses webhook app with wrong path", () => {
@@ -390,7 +399,8 @@ describe("configureAccess with mocked fetch", () => {
     expect(result.teamDomain).toBe(TEAM);
     expect(store.apps).toHaveLength(3);
     const dash = store.apps.find((a) => a.name === DASHBOARD_APP_NAME);
-    expect(dash.destinations[0].worker_id).toBe(WORKER_ID);
+    expect(dash.destinations[0]).toEqual({ type: "public", uri: HOST });
+    expect(dash.domain).toBe(HOST);
     const pols = store.policies[dash.id];
     expect(extractEmailsFromInclude(pols[0].include)).toEqual(["only@example.com"]);
     expect(lines.some((l) => l.includes("allowlist_count=1"))).toBe(true);
@@ -433,7 +443,8 @@ describe("configureAccess with mocked fetch", () => {
       allowed_idps: ["idp_cf"],
       app_launcher_visible: false,
       aud: AUD,
-      destinations: [{ type: "worker", worker_id: WORKER_ID }],
+      domain: HOST,
+      destinations: [{ type: "public", uri: HOST }],
     });
     store.policies[dashId] = [
       {
@@ -472,7 +483,7 @@ describe("configureAccess with mocked fetch", () => {
     store.apps.push({
       id: "wrong",
       name: DASHBOARD_APP_NAME,
-      destinations: [{ type: "worker", worker_id: "not-our-worker" }],
+      destinations: [{ type: "public", uri: "unrelated.example.com" }],
     });
     await expect(run("a@ex.com")).rejects.toThrow(/destination does not match/);
   });
@@ -488,7 +499,8 @@ describe("configureAccess with mocked fetch", () => {
       allowed_idps: ["idp_cf"],
       app_launcher_visible: false,
       aud: AUD,
-      destinations: [{ type: "worker", worker_id: WORKER_ID }],
+      domain: HOST,
+      destinations: [{ type: "public", uri: HOST }],
     });
     store.policies[dashId] = [
       {
@@ -533,7 +545,8 @@ describe("configureAccess with mocked fetch", () => {
       allowed_idps: ["idp_cf"],
       app_launcher_visible: false,
       aud: AUD,
-      destinations: [{ type: "worker", worker_id: WORKER_ID }],
+      domain: HOST,
+      destinations: [{ type: "public", uri: HOST }],
     });
     store.policies.dash_ok = [
       {
@@ -593,11 +606,20 @@ describe("resolveInstantAuthOptions", () => {
     ).toEqual({ auto_redirect_to_identity: true, allowed_idps: ["cf"] });
   });
 
-  it("disables instant auth when multiple non-Cloudflare IdPs exist", () => {
+  it("falls back to OTP when Cloudflare is absent", () => {
     expect(
       resolveInstantAuthOptions([
         { id: "g", type: "google" },
         { id: "otp", type: "onetimepin" },
+      ])
+    ).toEqual({ auto_redirect_to_identity: true, allowed_idps: ["otp"] });
+  });
+
+  it("disables instant auth when neither Cloudflare nor OTP exist", () => {
+    expect(
+      resolveInstantAuthOptions([
+        { id: "g", type: "google" },
+        { id: "gh", type: "github" },
       ])
     ).toEqual({ auto_redirect_to_identity: false });
   });
@@ -605,24 +627,25 @@ describe("resolveInstantAuthOptions", () => {
 
 describe("build bodies", () => {
   it("dashboard body shape with instant auth IdP", () => {
-    const body = buildDashboardAppBody(WORKER_ID, ["a@b.com"], {
+    const body = buildDashboardAppBody(HOST, ["a@b.com"], {
       auto_redirect_to_identity: true,
       allowed_idps: ["idp_cf"],
     });
     expect(body).toMatchObject({
       name: DASHBOARD_APP_NAME,
       type: "self_hosted",
+      domain: HOST,
       session_duration: SESSION,
       auto_redirect_to_identity: true,
       allowed_idps: ["idp_cf"],
       app_launcher_visible: false,
-      destinations: [{ type: "worker", worker_id: WORKER_ID }],
+      destinations: [{ type: "public", uri: HOST }],
     });
     expect(body.policies[0].name).toBe(DASHBOARD_POLICY_NAME);
   });
 
   it("dashboard body disables instant auth without a single IdP", () => {
-    const body = buildDashboardAppBody(WORKER_ID, ["a@b.com"]);
+    const body = buildDashboardAppBody(HOST, ["a@b.com"]);
     expect(body.auto_redirect_to_identity).toBe(false);
     expect(body.allowed_idps).toBeUndefined();
   });
