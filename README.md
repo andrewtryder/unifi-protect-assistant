@@ -7,6 +7,7 @@ A lightweight, premium Cloudflare Workers app that ingests webhook notifications
 - **Webhook Ingestion (`POST /unifi`)**: Authenticated webhook processing with schema parsing safeguards.
 - **Today dashboard**: Live landing page of who is present / was seen today, unknown-face counts, last-hour activity, webhook health, and a polling event stream (computed from `face_events`).
 - **People profiles**: Directory and `/people/:personKey` pages with typical arrival/departure, visit totals, camera frequency, heatmap, and recent thumbnails (keyed by stable `person_key`).
+- **Vehicles**: Directory and `/vehicles/:plateKey` plus `/vehicle-events` day log (keyed by `plate_key`). Visit/heatmap stats are derived on-read from `vehicle_events`.
 - **Health diagnostics**: `/health` shows last webhook/event, hour/day volumes, ingest counters (rejects, duplicates, D1 failures), cron last runs, row counts, and config warnings.
 - **Presence sessions**: Gap-based sessionization (default 20 minutes) so daily totals reflect observed presence, not first-to-last wall clock.
 - **Person Tracking**: By default, captures all known people from UniFi Protect's Face Library (`face_known`) plus unrecognized faces (`face_unknown`). Optional `TARGET_PERSON_NAMES` / `TARGET_PERSON_IDS` env vars restrict ingestion to specific individuals.
@@ -14,7 +15,7 @@ A lightweight, premium Cloudflare Workers app that ingests webhook notifications
 - **Reporting**: Materializes `presence_sessions` and `daily_person_reports` (first/last wall span + observed presence hours).
 - **Aesthetic UI**: A modern glassmorphism calendar and event log UI rendered server-side for rapid, responsive mobile and desktop viewing. Event thumbnails are shown when available.
 - **Data Retention Policy**: Scrubs raw payloads/images after ~30 days; deletes normalized events, reports, and sessions after ~365 days. Parent webhook rows can be removed while retained children keep `notification_id = NULL` (`ON DELETE SET NULL`).
-- **Vehicle events (experimental)**: License-plate ingestion is gated behind `ENABLE_VEHICLE_EVENTS=true` (default `false`). Storage/retention/diagnostics only — no dashboard surface yet. Plate values are never logged or sent to Honeybadger.
+- **Vehicle events**: License-plate ingestion is gated behind `ENABLE_VEHICLE_EVENTS=true`. Browse `/vehicles`, `/vehicles/:plateKey`, and `/vehicle-events` (same Access gate as People). Plate values are never logged or sent to Honeybadger.
 - **Readiness**: Public `GET /ready` checks D1 connectivity and required schema without exposing counts or config.
 
 ---
@@ -41,6 +42,11 @@ UniFi Protect NVR (Alarm Webhook)
                    ├─► GET /people/:personKey (profile)
                    ├─► GET /api/people (directory JSON)
                    ├─► GET /api/people/:personKey (profile JSON)
+                   ├─► GET /vehicles (directory by plate_key)
+                   ├─► GET /vehicles/:plateKey (profile)
+                   ├─► GET /api/vehicles (directory JSON)
+                   ├─► GET /api/vehicles/:plateKey (profile JSON)
+                   ├─► GET /vehicle-events?date=YYYY-MM-DD&plate=plate:KEY
                    ├─► GET /health (diagnostics)
                    ├─► GET /api/health (diagnostics JSON)
                    ├─► GET /calendar?month=YYYY-MM&person=Name
@@ -155,6 +161,10 @@ The **Today** page recomputes this live from `face_events` every request/poll. H
 ### Person profiles
 
 Each detected identity has a stable `person_key` (`id:…` when UniFi provides a face ID, otherwise `name:…`). Open **People** in the nav or visit `/people/<urlencoded-person_key>` (example: `/people/id%3Aabc123`). Profiles show lifetime first/last seen, observed visit totals from presence sessions, median typical arrival/departure (90 days), top cameras, a 12-month heatmap, and recent thumbnails.
+
+### Vehicle profiles
+
+License plates use a stable `plate_key` (`plate:ABC123` or `plate:unknown`). Open **Vehicles** in the nav or visit `/vehicles/<urlencoded-plate_key>` (example: `/vehicles/plate%3AABC123`). Visit counts, typical arrival/departure, and heatmaps are derived on-read from `vehicle_events` using the same gap minutes as people (`PRESENCE_GAP_MINUTES`). Day logs live at `/vehicle-events`. Configure Protect alarms to send only the plate subset you care about.
 
 ### Retention (raw vs normalized)
 

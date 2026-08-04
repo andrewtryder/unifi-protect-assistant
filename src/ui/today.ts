@@ -45,6 +45,30 @@ function peopleRowsHtml(snapshot: TodaySnapshot): string {
     .join("");
 }
 
+function vehiclesRowsHtml(snapshot: TodaySnapshot): string {
+  const vehicles = snapshot.vehicles || [];
+  if (vehicles.length === 0) {
+    return `<tr><td colspan="7" class="empty-cell">No vehicles seen yet today.</td></tr>`;
+  }
+  return vehicles
+    .map((v) => {
+      const statusClass = v.status === "present" ? "badge-accent" : "badge";
+      const statusLabel = v.status === "present" ? "Present" : "Away";
+      const href = `/vehicles/${encodeURIComponent(v.plate_key)}`;
+      const label = v.plate_text || v.plate_key.replace(/^plate:/, "");
+      return `<tr>
+        <td><a href="${href}" class="row-link">${escapeHtml(label)}</a></td>
+        <td><span class="badge ${statusClass}">${statusLabel}</span></td>
+        <td>${formatTime(v.first_seen_ms)}</td>
+        <td>${formatTime(v.last_seen_ms)}</td>
+        <td><code class="muted-code">${escapeHtml(v.last_camera_id)}</code></td>
+        <td>${v.observed_rounded_hours}h <span class="muted-sm">(${v.session_count} sess)</span></td>
+        <td>${v.sighting_count}</td>
+      </tr>`;
+    })
+    .join("");
+}
+
 function streamRowsHtml(snapshot: TodaySnapshot): string {
   if (snapshot.recent_events.length === 0) {
     return `<tr><td colspan="4" class="empty-cell">No events yet today.</td></tr>`;
@@ -85,6 +109,14 @@ export function renderTodayDashboard(snapshot: TodaySnapshot): string {
         <div class="value" data-field="seen_today_count">${snapshot.seen_today_count}</div>
       </div>
       <div class="card summary-card">
+        <div class="label">Vehicles present</div>
+        <div class="value" data-field="vehicles_present_count">${snapshot.vehicles_present_count}</div>
+      </div>
+      <div class="card summary-card">
+        <div class="label">Vehicles today</div>
+        <div class="value" data-field="vehicles_seen_today_count">${snapshot.vehicles_seen_today_count}</div>
+      </div>
+      <div class="card summary-card">
         <div class="label">Unknown faces</div>
         <div class="value" data-field="unknown_face_count">${snapshot.unknown_face_count}</div>
       </div>
@@ -116,6 +148,28 @@ export function renderTodayDashboard(snapshot: TodaySnapshot): string {
           </thead>
           <tbody id="people-tbody">
             ${peopleRowsHtml(snapshot)}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="today-section card">
+      <h3>Vehicles today</h3>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Plate</th>
+              <th>Status</th>
+              <th>First seen</th>
+              <th>Most recent</th>
+              <th>Last camera</th>
+              <th>Observed</th>
+              <th>Sightings</th>
+            </tr>
+          </thead>
+          <tbody id="vehicles-tbody">
+            ${vehiclesRowsHtml(snapshot)}
           </tbody>
         </table>
       </div>

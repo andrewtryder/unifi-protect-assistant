@@ -5,8 +5,10 @@ import {
   TodayPersonRow,
   TodaySnapshot,
   TodayStreamEvent,
+  TodayVehicleRow,
+  VehicleEvent,
 } from "../types.js";
-import { getEventsForDate, getWebhookHealth } from "../db/queries.js";
+import { getEventsForDate, getVehicleEventsForDate, getWebhookHealth } from "../db/queries.js";
 import { getLocalDate } from "../webhook/parser.js";
 import { roundToNearest15Mins } from "./round.js";
 import { WEBHOOK_STALE_MS } from "../ops/constants.js";
@@ -149,6 +151,99 @@ export function sessionizeEvents(events: FaceEvent[], gapResolver: GapResolver):
   return sessions;
 }
 
+export interface VehicleSessionDraft {
+  plate_key: string;
+  plate_text: string;
+  local_date: string;
+  started_at_ms: number;
+  ended_at_ms: number;
+  first_event_id: string;
+  last_event_id: string;
+  first_camera_id: string;
+  last_camera_id: string;
+  sighting_count: number;
+}
+
+/**
+ * Gap-sessionize vehicle events by plate_key (reuses person/camera gap resolver keys).
+ */
+export function sessionizeVehicleEvents(
+  events: VehicleEvent[],
+  gapResolver: GapResolver
+): VehicleSessionDraft[] {
+  if (events.length === 0) return [];
+
+  const byPlate = new Map<string, VehicleEvent[]>();
+  for (const event of events) {
+    const list = byPlate.get(event.plate_key) || [];
+    list.push(event);
+    byPlate.set(event.plate_key, list);
+  }
+
+  const sessions: VehicleSessionDraft[] = [];
+
+  for (const [, plateEvents] of byPlate) {
+    plateEvents.sort((a, b) => a.seen_at_ms - b.seen_at_ms);
+
+    let current: VehicleSessionDraft | null = null;
+    let prevCameraId: string | undefined;
+
+    for (const event of plateEvents) {
+      if (!current) {
+        current = {
+          plate_key: event.plate_key,
+          plate_text: event.plate_text || event.plate_key.replace(/^plate:/, ""),
+          local_date: event.local_date,
+          started_at_ms: event.seen_at_ms,
+          ended_at_ms: event.seen_at_ms,
+          first_event_id: event.event_id,
+          last_event_id: event.event_id,
+          first_camera_id: event.camera_id,
+          last_camera_id: event.camera_id,
+          sighting_count: 1,
+        };
+        prevCameraId = event.camera_id;
+        continue;
+      }
+
+      const sameCamera =
+        prevCameraId && event.camera_id && prevCameraId === event.camera_id
+          ? event.camera_id
+          : undefined;
+      const gapMs = gapResolver(event.plate_key, sameCamera);
+      const delta = event.seen_at_ms - current.ended_at_ms;
+
+      if (delta > gapMs) {
+        sessions.push(current);
+        current = {
+          plate_key: event.plate_key,
+          plate_text: event.plate_text || event.plate_key.replace(/^plate:/, ""),
+          local_date: event.local_date,
+          started_at_ms: event.seen_at_ms,
+          ended_at_ms: event.seen_at_ms,
+          first_event_id: event.event_id,
+          last_event_id: event.event_id,
+          first_camera_id: event.camera_id,
+          last_camera_id: event.camera_id,
+          sighting_count: 1,
+        };
+      } else {
+        current.ended_at_ms = event.seen_at_ms;
+        current.last_event_id = event.event_id;
+        current.last_camera_id = event.camera_id;
+        if (event.plate_text) current.plate_text = event.plate_text;
+        current.sighting_count += 1;
+      }
+      prevCameraId = event.camera_id;
+    }
+
+    if (current) sessions.push(current);
+  }
+
+  sessions.sort((a, b) => a.started_at_ms - b.started_at_ms);
+  return sessions;
+}
+
 export function draftsToPresenceSessions(
   drafts: SessionDraft[],
   generatedAtMs: number,
@@ -265,6 +360,56 @@ export async function buildTodaySnapshot(
       image_base64: e.image_base64,
     }));
 
+  const vehicleEvents = await getVehicleEventsForDate(env, localDate);
+  const vehicleDrafts = sessionizeVehicleEvents(vehicleEvents, gapResolver);
+  const byPlate = new Map<string, TodayVehicleRow>();
+  for (const session of vehicleDrafts) {
+    const existing = byPlate.get(session.plate_key);
+    const observedSeconds =
+      (existing?.observed_span_seconds || 0) +
+      Math.max(0, session.ended_at_ms - session.started_at_ms) / 1000;
+    const sightingCount = (existing?.sighting_count || 0) + session.sighting_count;
+    const sessionCount = (existing?.session_count || 0) + 1;
+    const firstSeen = existing
+      ? Math.min(existing.first_seen_ms, session.started_at_ms)
+      : session.started_at_ms;
+    const lastSeen = existing
+      ? Math.max(existing.last_seen_ms, session.ended_at_ms)
+      : session.ended_at_ms;
+    const lastCamera =
+      !existing || session.ended_at_ms >= existing.last_seen_ms
+        ? session.last_camera_id
+        : existing.last_camera_id;
+    const plateText =
+      !existing || session.ended_at_ms >= existing.last_seen_ms
+        ? session.plate_text
+        : existing.plate_text;
+
+    const gapMs = gapResolver(session.plate_key, lastCamera);
+    const status: "present" | "away" = nowMs - lastSeen <= gapMs ? "present" : "away";
+    const { roundedMinutes, roundedHours } = roundToNearest15Mins(observedSeconds * 1000);
+
+    byPlate.set(session.plate_key, {
+      plate_key: session.plate_key,
+      plate_text: plateText,
+      status,
+      first_seen_ms: firstSeen,
+      last_seen_ms: lastSeen,
+      last_camera_id: lastCamera,
+      observed_span_seconds: observedSeconds,
+      observed_rounded_minutes: roundedMinutes,
+      observed_rounded_hours: roundedHours,
+      session_count: sessionCount,
+      sighting_count: sightingCount,
+    });
+  }
+
+  const vehicles = [...byPlate.values()].sort((a, b) => {
+    if (a.status !== b.status) return a.status === "present" ? -1 : 1;
+    return b.last_seen_ms - a.last_seen_ms;
+  });
+  const vehicleEventsLastHour = vehicleEvents.filter((e) => e.seen_at_ms >= hourAgo).length;
+
   return {
     local_date: localDate,
     generated_at_ms: nowMs,
@@ -272,12 +417,16 @@ export async function buildTodaySnapshot(
     seen_today_count: people.length,
     unknown_face_count: unknownFaceCount,
     events_last_hour: eventsLastHour,
+    vehicles_present_count: vehicles.filter((v) => v.status === "present").length,
+    vehicles_seen_today_count: vehicles.length,
+    vehicle_events_last_hour: vehicleEventsLastHour,
     webhook: {
       last_received_at_ms: webhook.last_received_at_ms,
       count_last_hour: webhook.count_last_hour,
       healthy,
     },
     people,
+    vehicles,
     recent_events: recentEvents,
   };
 }

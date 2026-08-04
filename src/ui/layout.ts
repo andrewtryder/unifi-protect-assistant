@@ -46,6 +46,7 @@ export function renderLayout(
     <nav>
       <a href="/today" id="nav-today">Today</a>
       <a href="/people" id="nav-people">People</a>
+      <a href="/vehicles" id="nav-vehicles">Vehicles</a>
       <a href="${calendarHref}" id="nav-calendar">Calendar</a>
       <a href="${eventsHref}" id="nav-events">Events Log</a>
       <a href="/health" id="nav-health">Health</a>
