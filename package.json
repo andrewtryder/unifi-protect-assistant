@@ -1,6 +1,6 @@
 {
   "name": "unifi-protect-assistant",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Private Cloudflare Workers dashboard for UniFi Protect face and vehicle events, reporting, and presence tracking",
   "license": "MIT",
   "main": "src/index.ts",
