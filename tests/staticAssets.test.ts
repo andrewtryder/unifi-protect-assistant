@@ -42,7 +42,11 @@ function minimalTodaySnapshot(): TodaySnapshot {
     seen_today_count: 0,
     unknown_face_count: 0,
     events_last_hour: 0,
+    vehicles_present_count: 0,
+    vehicles_seen_today_count: 0,
+    vehicle_events_last_hour: 0,
     people: [],
+    vehicles: [],
     recent_events: [],
     webhook: {
       healthy: true,

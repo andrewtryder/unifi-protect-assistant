@@ -8,6 +8,10 @@ import {
   getDistinctPeopleForMonth,
   getPeopleDirectory,
   getPersonProfile,
+  getVehiclesDirectory,
+  getVehicleProfile,
+  getVehicleEventsForDate,
+  getDistinctPlatesForDate,
 } from "./db/queries.js";
 import { ensureReportsForMonth, generateDailyReport } from "./reporting/generator.js";
 import { runRetentionCleanup } from "./reporting/cleanup.js";
@@ -15,7 +19,13 @@ import { renderCalendar } from "./ui/calendar.js";
 import { renderEventsLog } from "./ui/events.js";
 import { renderTodayDashboard } from "./ui/today.js";
 import { renderPeopleDirectory, renderPersonProfile, renderPersonNotFound } from "./ui/people.js";
-import { PersonSummary } from "./types.js";
+import {
+  renderVehiclesDirectory,
+  renderVehicleProfile,
+  renderVehicleNotFound,
+  renderVehicleEventsLog,
+} from "./ui/vehicles.js";
+import { PersonSummary, PlateSummary } from "./types.js";
 import { buildTodaySnapshot } from "./reporting/sessions.js";
 import {
   classifyDbError,
@@ -54,6 +64,21 @@ function withSelectedPerson(people: PersonSummary[], selectedPerson?: string): P
   return [...people, { person_name: selectedPerson, last_seen_ms: 0, event_count: 0 }].sort(
     (a, b) => a.person_name.localeCompare(b.person_name)
   );
+}
+
+function withSelectedPlate(plates: PlateSummary[], selectedPlateKey?: string): PlateSummary[] {
+  if (!selectedPlateKey) return plates;
+  const alreadyListed = plates.some((p) => p.plate_key === selectedPlateKey);
+  if (alreadyListed) return plates;
+  return [
+    ...plates,
+    {
+      plate_key: selectedPlateKey,
+      plate_text: selectedPlateKey.replace(/^plate:/, ""),
+      last_seen_ms: 0,
+      event_count: 0,
+    },
+  ].sort((a, b) => a.plate_text.localeCompare(b.plate_text));
 }
 
 function requireGet(request: Request): Response | null {
@@ -272,6 +297,97 @@ export default withHoneybadger(
         if (!gate.ok) return gate.response;
         const people = await getPeopleDirectory(env);
         return jsonResponse(people, { extra: withRequestIdHeader(undefined, requestId) });
+      }
+
+      if (url.pathname === "/vehicles") {
+        const notGet = requireGet(request);
+        if (notGet) return notGet;
+        const gate = await requireAccessAuth(request, env, "html", requestId);
+        if (!gate.ok) return gate.response;
+        const vehicles = await getVehiclesDirectory(env);
+        return htmlResponse(renderVehiclesDirectory(vehicles), {
+          extra: withRequestIdHeader(undefined, requestId),
+        });
+      }
+
+      if (url.pathname.startsWith("/vehicles/")) {
+        const notGet = requireGet(request);
+        if (notGet) return notGet;
+        const gate = await requireAccessAuth(request, env, "html", requestId);
+        if (!gate.ok) return gate.response;
+        const plateKey = safeDecodeURIComponent(url.pathname.slice("/vehicles/".length));
+        if (plateKey === null) {
+          return genericErrorResponse(
+            400,
+            "Bad Request",
+            withRequestIdHeader(undefined, requestId)
+          );
+        }
+        if (!plateKey) {
+          return Response.redirect(`${url.origin}/vehicles`, 302);
+        }
+        const profile = await getVehicleProfile(env, plateKey);
+        if (!profile) {
+          return htmlResponse(renderVehicleNotFound(plateKey), {
+            status: 404,
+            extra: withRequestIdHeader(undefined, requestId),
+          });
+        }
+        return htmlResponse(renderVehicleProfile(profile), {
+          extra: withRequestIdHeader(undefined, requestId),
+        });
+      }
+
+      if (url.pathname === "/api/vehicles") {
+        const notGet = requireGet(request);
+        if (notGet) return notGet;
+        const gate = await requireAccessAuth(request, env, "json", requestId);
+        if (!gate.ok) return gate.response;
+        const vehicles = await getVehiclesDirectory(env);
+        return jsonResponse(vehicles, { extra: withRequestIdHeader(undefined, requestId) });
+      }
+
+      if (url.pathname.startsWith("/api/vehicles/")) {
+        const notGet = requireGet(request);
+        if (notGet) return notGet;
+        const gate = await requireAccessAuth(request, env, "json", requestId);
+        if (!gate.ok) return gate.response;
+        const plateKey = safeDecodeURIComponent(url.pathname.slice("/api/vehicles/".length));
+        if (plateKey === null) {
+          return genericErrorResponse(
+            400,
+            "Bad Request",
+            withRequestIdHeader(undefined, requestId)
+          );
+        }
+        const profile = await getVehicleProfile(env, plateKey);
+        if (!profile) {
+          return jsonResponse(
+            { error: "Not found" },
+            { status: 404, extra: withRequestIdHeader(undefined, requestId) }
+          );
+        }
+        return jsonResponse(profile, { extra: withRequestIdHeader(undefined, requestId) });
+      }
+
+      if (url.pathname === "/vehicle-events") {
+        const notGet = requireGet(request);
+        if (notGet) return notGet;
+        const gate = await requireAccessAuth(request, env, "html", requestId);
+        if (!gate.ok) return gate.response;
+        let date = url.searchParams.get("date");
+        if (!date || !isValidLocalDateString(date)) {
+          date = getLocalDate(Date.now(), timezone);
+        }
+        const plate = url.searchParams.get("plate") || undefined;
+        const [events, plates] = await Promise.all([
+          getVehicleEventsForDate(env, date, plate),
+          getDistinctPlatesForDate(env, date),
+        ]);
+        return htmlResponse(
+          renderVehicleEventsLog(date, events, withSelectedPlate(plates, plate), plate),
+          { extra: withRequestIdHeader(undefined, requestId) }
+        );
       }
 
       return textResponse("Not Found", {

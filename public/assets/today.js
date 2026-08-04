@@ -77,6 +77,52 @@
       .join("");
   }
 
+  function vehiclesHtml(snapshot) {
+    var vehicles = snapshot.vehicles || [];
+    if (!vehicles.length) {
+      return '<tr><td colspan="7" class="empty-cell">No vehicles seen yet today.</td></tr>';
+    }
+    return vehicles
+      .map(function (v) {
+        var statusClass = v.status === "present" ? "badge-accent" : "badge";
+        var statusLabel = v.status === "present" ? "Present" : "Away";
+        var href = "/vehicles/" + encodeURIComponent(v.plate_key);
+        var label = v.plate_text || String(v.plate_key || "").replace(/^plate:/, "");
+        return (
+          "<tr>" +
+          '<td><a href="' +
+          href +
+          '" class="row-link">' +
+          escapeHtml(label) +
+          "</a></td>" +
+          '<td><span class="badge ' +
+          statusClass +
+          '">' +
+          statusLabel +
+          "</span></td>" +
+          "<td>" +
+          formatTime(v.first_seen_ms) +
+          "</td>" +
+          "<td>" +
+          formatTime(v.last_seen_ms) +
+          "</td>" +
+          '<td><code class="muted-code">' +
+          escapeHtml(v.last_camera_id) +
+          "</code></td>" +
+          "<td>" +
+          v.observed_rounded_hours +
+          'h <span class="muted-sm">(' +
+          v.session_count +
+          " sess)</span></td>" +
+          "<td>" +
+          v.sighting_count +
+          "</td>" +
+          "</tr>"
+        );
+      })
+      .join("");
+  }
+
   function streamHtml(snapshot) {
     if (!snapshot.recent_events.length) {
       return '<tr><td colspan="4" class="empty-cell">No events yet today.</td></tr>';
@@ -106,11 +152,14 @@
   function applySnapshot(snapshot) {
     var present = document.querySelector('[data-field="present_count"]');
     var seen = document.querySelector('[data-field="seen_today_count"]');
+    var vehiclesPresent = document.querySelector('[data-field="vehicles_present_count"]');
+    var vehiclesSeen = document.querySelector('[data-field="vehicles_seen_today_count"]');
     var unknown = document.querySelector('[data-field="unknown_face_count"]');
     var eventsHour = document.querySelector('[data-field="events_last_hour"]');
     var statusEl = document.querySelector('[data-field="webhook_status"]');
     var webhookSub = document.querySelector('[data-field="webhook_sub"]');
     var peopleBody = document.getElementById("people-tbody");
+    var vehiclesBody = document.getElementById("vehicles-tbody");
     var streamBody = document.getElementById("stream-tbody");
     var todayDate = document.getElementById("today-date");
     var updatedAt = document.getElementById("updated-at");
@@ -119,6 +168,8 @@
 
     present.textContent = snapshot.present_count;
     if (seen) seen.textContent = snapshot.seen_today_count;
+    if (vehiclesPresent) vehiclesPresent.textContent = snapshot.vehicles_present_count || 0;
+    if (vehiclesSeen) vehiclesSeen.textContent = snapshot.vehicles_seen_today_count || 0;
     if (unknown) unknown.textContent = snapshot.unknown_face_count;
     if (eventsHour) eventsHour.textContent = snapshot.events_last_hour;
     if (statusEl) {
@@ -134,6 +185,7 @@
         " in last hour";
     }
     peopleBody.innerHTML = peopleHtml(snapshot);
+    if (vehiclesBody) vehiclesBody.innerHTML = vehiclesHtml(snapshot);
     streamBody.innerHTML = streamHtml(snapshot);
     if (todayDate) todayDate.textContent = snapshot.local_date + " · America/New_York";
     if (updatedAt) updatedAt.textContent = formatTime(snapshot.generated_at_ms);

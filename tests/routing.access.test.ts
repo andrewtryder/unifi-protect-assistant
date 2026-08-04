@@ -121,6 +121,9 @@ describe("Access routing gate", () => {
     "/today",
     "/people",
     "/people/id%3Aabc",
+    "/vehicles",
+    "/vehicles/plate%3AABC123",
+    "/vehicle-events",
     "/calendar",
     "/events",
     "/health",
@@ -130,6 +133,8 @@ describe("Access routing gate", () => {
     "/api/health",
     "/api/people",
     "/api/people/id%3Aabc",
+    "/api/vehicles",
+    "/api/vehicles/plate%3AABC123",
     "/api/reports",
     "/api/events",
   ];
@@ -262,6 +267,7 @@ describe("Access routing gate", () => {
   it("points Sign out at Cloudflare Access logout", () => {
     const html = renderLayout("Test", "<p>body</p>");
     expect(html).toContain('href="/cdn-cgi/access/logout"');
+    expect(html).toContain('href="/vehicles"');
     expect(html).toContain('href="/assets/app.css"');
     expect(html).toContain('src="/assets/app.js"');
     expect(html).not.toMatch(/\/api\/auth|better-auth/i);

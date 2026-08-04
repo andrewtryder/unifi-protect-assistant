@@ -8,6 +8,10 @@ import {
   PersonCameraStat,
   PersonHeatmapDay,
   PersonProfile,
+  PlateSummary,
+  VehicleDirectoryEntry,
+  VehicleEvent,
+  VehicleProfile,
 } from "../types.js";
 import { getLocalDate } from "../webhook/parser.js";
 import {
@@ -16,6 +20,7 @@ import {
   typicalArrivalDeparture,
 } from "../reporting/profileStats.js";
 import { roundToNearest15Mins } from "../reporting/round.js";
+import { createGapResolver, sessionizeVehicleEvents } from "../reporting/sessions.js";
 
 /**
  * Returns distinct people seen in face_events, grouped case-insensitively by name.
@@ -657,6 +662,220 @@ export async function getPersonProfile(env: Env, personKey: string): Promise<Per
     person_key: identity.person_key,
     person_name: identity.person_name,
     person_id: identity.person_id || "",
+    first_seen_ms: identity.first_seen_ms,
+    last_seen_ms: identity.last_seen_ms,
+    event_count: identity.event_count,
+    visit_count,
+    observed_span_seconds,
+    observed_rounded_hours: roundedHours,
+    typical_arrival_minutes: arrivalMinutes,
+    typical_departure_minutes: departureMinutes,
+    typical_arrival_label: formatMinutesAsTime(arrivalMinutes),
+    typical_departure_label: formatMinutesAsTime(departureMinutes),
+    cameras: camerasResult.results || [],
+    heatmap,
+    recent_events: recent.results || [],
+  };
+}
+
+/**
+ * Query vehicle events for a specific local date, optionally filtered by plate_key.
+ */
+export async function getVehicleEventsForDate(
+  env: Env,
+  dateStr: string,
+  plateKey?: string
+): Promise<VehicleEvent[]> {
+  let query = `
+    SELECT id, notification_id, event_id, seen_at_ms, local_date,
+           plate_key, plate_text, trigger_key, camera_id, alarm_name,
+           image_base64
+    FROM vehicle_events
+    WHERE local_date = ?
+  `;
+  const bindings: string[] = [dateStr];
+
+  if (plateKey) {
+    query += ` AND plate_key = ?`;
+    bindings.push(plateKey);
+  }
+
+  query += ` ORDER BY seen_at_ms ASC`;
+
+  const { results } = await env.DB.prepare(query)
+    .bind(...bindings)
+    .all<VehicleEvent>();
+  return results || [];
+}
+
+/**
+ * Distinct plates seen on a specific local date.
+ */
+export async function getDistinctPlatesForDate(env: Env, dateStr: string): Promise<PlateSummary[]> {
+  const query = `
+    SELECT plate_key,
+           MAX(plate_text) AS plate_text,
+           MAX(seen_at_ms) AS last_seen_ms,
+           COUNT(*) AS event_count
+    FROM vehicle_events
+    WHERE local_date = ?
+    GROUP BY plate_key
+    ORDER BY plate_text ASC
+  `;
+  const { results } = await env.DB.prepare(query).bind(dateStr).all<PlateSummary>();
+  return results || [];
+}
+
+/**
+ * Vehicles directory grouped by stable plate_key.
+ */
+export async function getVehiclesDirectory(env: Env): Promise<VehicleDirectoryEntry[]> {
+  const query = `
+    SELECT plate_key,
+           MAX(plate_text) AS plate_text,
+           MIN(seen_at_ms) AS first_seen_ms,
+           MAX(seen_at_ms) AS last_seen_ms,
+           COUNT(*) AS event_count
+    FROM vehicle_events
+    GROUP BY plate_key
+    ORDER BY MAX(plate_text) ASC
+  `;
+  const { results } = await env.DB.prepare(query).all<VehicleDirectoryEntry>();
+  return results || [];
+}
+
+/**
+ * Full vehicle profile for a plate_key, or null if unknown.
+ * Visits / heatmap / typical times are derived on-read from vehicle_events.
+ */
+export async function getVehicleProfile(
+  env: Env,
+  plateKey: string
+): Promise<VehicleProfile | null> {
+  const timezone = env.TIMEZONE || "America/New_York";
+  const identity = await env.DB.prepare(
+    `
+    SELECT plate_key,
+           MAX(plate_text) AS plate_text,
+           MIN(seen_at_ms) AS first_seen_ms,
+           MAX(seen_at_ms) AS last_seen_ms,
+           COUNT(*) AS event_count
+    FROM vehicle_events
+    WHERE plate_key = ?
+    GROUP BY plate_key
+  `
+  )
+    .bind(plateKey)
+    .first<{
+      plate_key: string;
+      plate_text: string;
+      first_seen_ms: number;
+      last_seen_ms: number;
+      event_count: number;
+    }>();
+
+  if (!identity) return null;
+
+  const today = getLocalDate(Date.now(), timezone);
+  const since90 = localDateDaysAgo(today, 90);
+  const since365 = localDateDaysAgo(today, 365);
+  const gapResolver = createGapResolver(env);
+
+  const allForPlate = await env.DB.prepare(
+    `
+    SELECT id, notification_id, event_id, seen_at_ms, local_date,
+           plate_key, plate_text, trigger_key, camera_id, alarm_name,
+           image_base64
+    FROM vehicle_events
+    WHERE plate_key = ?
+    ORDER BY seen_at_ms ASC
+  `
+  )
+    .bind(plateKey)
+    .all<VehicleEvent>();
+
+  const events = allForPlate.results || [];
+  const drafts = sessionizeVehicleEvents(events, gapResolver);
+  const visit_count = drafts.length;
+  const observed_span_seconds = drafts.reduce(
+    (sum, d) => sum + Math.max(0, d.ended_at_ms - d.started_at_ms) / 1000,
+    0
+  );
+  const { roundedHours } = roundToNearest15Mins(observed_span_seconds * 1000);
+
+  const dayWindowsMap = new Map<string, { started_at_ms: number; ended_at_ms: number }>();
+  for (const d of drafts) {
+    if (d.local_date < since90) continue;
+    const existing = dayWindowsMap.get(d.local_date);
+    if (!existing) {
+      dayWindowsMap.set(d.local_date, {
+        started_at_ms: d.started_at_ms,
+        ended_at_ms: d.ended_at_ms,
+      });
+    } else {
+      existing.started_at_ms = Math.min(existing.started_at_ms, d.started_at_ms);
+      existing.ended_at_ms = Math.max(existing.ended_at_ms, d.ended_at_ms);
+    }
+  }
+  const dayWindows = [...dayWindowsMap.entries()].map(([local_date, w]) => ({
+    local_date,
+    started_at_ms: w.started_at_ms,
+    ended_at_ms: w.ended_at_ms,
+  }));
+  const { arrivalMinutes, departureMinutes } = typicalArrivalDeparture(dayWindows, timezone);
+
+  const camerasResult = await env.DB.prepare(
+    `
+    SELECT camera_id, COUNT(*) AS event_count
+    FROM vehicle_events
+    WHERE plate_key = ?
+    GROUP BY camera_id
+    ORDER BY event_count DESC
+    LIMIT 10
+  `
+  )
+    .bind(plateKey)
+    .all<PersonCameraStat>();
+
+  const heatByDate = new Map<string, PersonHeatmapDay>();
+  for (const d of drafts) {
+    if (d.local_date < since365) continue;
+    const seconds = Math.max(0, d.ended_at_ms - d.started_at_ms) / 1000;
+    const existing = heatByDate.get(d.local_date);
+    if (!existing) {
+      const { roundedHours: h } = roundToNearest15Mins(seconds * 1000);
+      heatByDate.set(d.local_date, {
+        local_date: d.local_date,
+        observed_span_seconds: seconds,
+        observed_rounded_hours: h,
+        session_count: 1,
+      });
+    } else {
+      existing.observed_span_seconds += seconds;
+      existing.session_count += 1;
+      const { roundedHours: h } = roundToNearest15Mins(existing.observed_span_seconds * 1000);
+      existing.observed_rounded_hours = h;
+    }
+  }
+  const heatmap = [...heatByDate.values()].sort((a, b) => a.local_date.localeCompare(b.local_date));
+
+  const recent = await env.DB.prepare(
+    `
+    SELECT id, notification_id, event_id, seen_at_ms, local_date,
+           plate_key, plate_text, trigger_key, camera_id, alarm_name,
+           image_base64
+    FROM vehicle_events
+    WHERE plate_key = ?
+    ORDER BY seen_at_ms DESC
+    LIMIT 24
+  `
+  )
+    .bind(plateKey)
+    .all<VehicleEvent>();
+
+  return {
+    plate_key: identity.plate_key,
+    plate_text: identity.plate_text || identity.plate_key.replace(/^plate:/, ""),
     first_seen_ms: identity.first_seen_ms,
     last_seen_ms: identity.last_seen_ms,
     event_count: identity.event_count,

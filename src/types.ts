@@ -157,6 +157,20 @@ export interface TodayPersonRow {
   sighting_count: number;
 }
 
+export interface TodayVehicleRow {
+  plate_key: string;
+  plate_text: string;
+  status: "present" | "away";
+  first_seen_ms: number;
+  last_seen_ms: number;
+  last_camera_id: string;
+  observed_span_seconds: number;
+  observed_rounded_minutes: number;
+  observed_rounded_hours: number;
+  session_count: number;
+  sighting_count: number;
+}
+
 export interface TodayStreamEvent {
   event_id: string;
   seen_at_ms: number;
@@ -173,12 +187,16 @@ export interface TodaySnapshot {
   seen_today_count: number;
   unknown_face_count: number;
   events_last_hour: number;
+  vehicles_present_count: number;
+  vehicles_seen_today_count: number;
+  vehicle_events_last_hour: number;
   webhook: {
     last_received_at_ms: number | null;
     count_last_hour: number;
     healthy: boolean;
   };
   people: TodayPersonRow[];
+  vehicles: TodayVehicleRow[];
   recent_events: TodayStreamEvent[];
 }
 
@@ -188,10 +206,25 @@ export interface PersonSummary {
   event_count: number;
 }
 
+export interface PlateSummary {
+  plate_key: string;
+  plate_text: string;
+  last_seen_ms: number;
+  event_count: number;
+}
+
 export interface PersonDirectoryEntry {
   person_key: string;
   person_name: string;
   person_id: string;
+  first_seen_ms: number;
+  last_seen_ms: number;
+  event_count: number;
+}
+
+export interface VehicleDirectoryEntry {
+  plate_key: string;
+  plate_text: string;
   first_seen_ms: number;
   last_seen_ms: number;
   event_count: number;
@@ -227,6 +260,24 @@ export interface PersonProfile {
   cameras: PersonCameraStat[];
   heatmap: PersonHeatmapDay[];
   recent_events: FaceEvent[];
+}
+
+export interface VehicleProfile {
+  plate_key: string;
+  plate_text: string;
+  first_seen_ms: number;
+  last_seen_ms: number;
+  event_count: number;
+  visit_count: number;
+  observed_span_seconds: number;
+  observed_rounded_hours: number;
+  typical_arrival_minutes: number | null;
+  typical_departure_minutes: number | null;
+  typical_arrival_label: string | null;
+  typical_departure_label: string | null;
+  cameras: PersonCameraStat[];
+  heatmap: PersonHeatmapDay[];
+  recent_events: VehicleEvent[];
 }
 
 export interface WebhookNotification {
